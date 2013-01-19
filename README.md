@@ -4,6 +4,10 @@ GoogleCloud
 
 Google Compute Engine
 =====================
-docs: https://developers.google.com/compute/docs/
+Google compute engine docs: https://developers.google.com/compute/docs/
 
-gcutil: https://developers.google.com/compute/docs/gcutil/
+Google compute engine tool ( gcutil ): https://developers.google.com/compute/docs/gcutil/
+
+Google cloud storage tool ( gsutil ): https://developers.google.com/storage/docs/gsutil
+
+
