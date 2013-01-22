@@ -1,6 +1,7 @@
 GoogleCloud
 ===========
 
+Starting point for Google Cloud
 
 Google Compute Engine
 =====================
