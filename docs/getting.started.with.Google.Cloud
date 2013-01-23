@@ -38,7 +38,9 @@ Login to your instance 'i001'
         gcutil ssh i001
     
 
-To terminate your 'i001' instance
+Once you are done with your instance, terminate it
 
         gcutil deleteinstance i001
 
+
+There are many other gcutil commands - please see the gcutil documentation at https://developers.google.com/compute/docs/gcutil/ 
