@@ -14,4 +14,4 @@ Google Cloud Storage tool ( gsutil ): https://developers.google.com/storage/docs
 Quick Guide on Getting Started with Google Cloud
 ================================================
 
-  setup gcutil and gsutil tools ; create and terminate an instance - see https://github.com/qtrinh/GoogleCloud/blob/master/docs/getting.started.with.Google.Cloud
+  setup gcutil and gsutil tools ; create and terminate an instance - see https://github.com/qtrinh/GoogleCloud/blob/master/docs/getting.started.with.Google.Cloud.md
