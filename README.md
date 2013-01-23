@@ -27,10 +27,10 @@ In your home directory, create a directory called 'GoogleCloud'.  Then download 
 Add both gcutil and gsutil to your PATH
 
     GCUTIL_HOME="$HOME/GoogleCloud/gcutil"
-    export PATH=${PATH}:$GCUTIL_HOME/gcutil-1.5.0
+    export PATH=$GCUTIL_HOME/gcutil-1.5.0:${PATH}
 
     GSUTIL_HOME="$HOME/GoogleCloud/gsutil"
-    export PATH=${PATH}:$GSUTIL_HOME/gsutil
+    export PATH=$GSUTIL_HOME/gsutil:${PATH}
 
 
 Set your environment variable PID to your Google Cloud project ID.  Run 'gcutil auth' to request a token. This command prints a URL where you can acquire an OAuth 2.0 refresh token for Google Compute Engine.
