@@ -42,13 +42,14 @@ Set your default project
 
     gcutil getproject --project=$PID --cache_flag_values
 
-Create a machine instance named 'i001' in zone 'us-east1-a' with machine instance type 'n1-standard-1'
+Create a machine instance named 'i001' in 'us-east1-a' zone with machine instance type 'n1-standard-1'
 
-    MACHINE_TYPE="n1-standard-1"; ZONE="us-east1-a"; gcutil addinstance i001 --wait_until_running --machine_type=$MACHINE_TYPE --zone=$ZONE
+    gcutil addinstance i001 --wait_until_running --machine_type=n1-standard-1 --zone=us-east1-a
     
 Login to your instance 'i001'
 
     gcutil ssh i001
     
+
     
 
