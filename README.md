@@ -1,7 +1,7 @@
 GoogleCloud
 ===========
 
-This README file contains a quick reference for getting started with Google Cloud.
+This GitHub repository contains a quick reference for getting started with Google Cloud.
 
 Documentations
 =====================
