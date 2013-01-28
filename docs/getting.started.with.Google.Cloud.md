@@ -29,6 +29,10 @@ Set your default project
 
         gcutil getproject --project=$PID --cache_flag_values
 
+Add firewall. To serve a web page from an instance, you need to create a firewall rule that permits incoming HTTP traffic on port 80.
+        
+        gcutil addfirewall http2 --description="Incoming http allowed." --allowed="tcp:http"
+
 Create a machine instance named 'i001' in 'us-east1-a' zone with machine instance type 'n1-standard-1'
 
         gcutil addinstance i001 --wait_until_running --machine_type=n1-standard-1 --zone=us-east1-a
