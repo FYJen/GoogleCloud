@@ -39,8 +39,27 @@ Steps
 Logon to two instances either by gcutil or ssh. 
 
 * switch to admin user
-	
+		
 		sudo su
+
+* Edit /ect/hosts file 
+
+		1. Master node needs an entries of Compute node's
+		2. Comput node needs an entries of Master node's 
+	
+* For example:
+		
+		Master:
+		127.0.0.1 localhost
+		169.254.169.254 metadata.google.internal metadata
+		10.240.59.34 ajen02.c.qtrinhcloud.internal ajen02
+		10.240.81.31 ajen01.c.qtrinhcloud.internal ajen01  # Added by Google
+	
+		Compute:
+		127.0.0.1 localhost
+		169.254.169.254 metadata.google.internal metadata
+		10.240.81.31 ajen01.c.qtrinhcloud.internal ajen01
+		10.240.59.34 ajen02.c.qtrinhcloud.internal ajen02  # Added by Google
 
 * Update source.list
 	
@@ -96,7 +115,7 @@ Replicate step 4 on both master and compute nodes.
 
 		apt-get isntall gridengine-client gridengine-exec
 	
-	An communication error similar to the one above might be thrown again. Thus, gridengine-exec fails to start. This time we will need to manually modify act_qmaster file.
+	An communication error similar to the one above might be thrown again. Thus, gridengine-exec fails to start. This time we will need to manually modify act_qmaster file, so the compute node knows which the master node is.
 	
 		echo ajen01.c.qtrinhcloud.internal > /var/lib/gridengine/default/common/act_qmaster
 	
