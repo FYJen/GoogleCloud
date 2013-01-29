@@ -25,30 +25,67 @@ Steps
 * Machine Type : n1-standard-4-d (https://cloud.google.com/pricing/compute-engine)
 * Zone         : us-east1-a
 	
-Use the google_create.sh to create instances. (instance_name is required as arugement)
+	Use the google_create.sh to create instances. (instance_name is required as arugement)
 
-	. google_create.sh "instance-name"
+		. google_create.sh "instance-name"
 	
-We will need two instances. For example,
+	We will need two instances. For example,
 
-	.google_create.sh ajen00
-	.google_create.sh ajen01
+		.google_create.sh ajen00
+		.google_create.sh ajen01
 
 **Step 4:** Install prerequisites for SGE
 
-switch to admin user
+Logon to two instances either by gcutil or ssh. 
+
+* switch to admin user
 	
-	sudo su
+		sudo su
 
-Update source.list
+* Update source.list
 	
-	apt-get update 
+		apt-get update 
 
-Install language package (optional; however, it is a bit messy when we are insatlling packages becasue some warrning messages will get thrown.)
+* Install language package (optional; however, it will be really messy when we are insatlling packages through apt-get becasue some warrning messages will get thrown.)
 
-	apt-get install language-pack-en-base
-	/usr/sbin/locale-gen en_IN.UTF-8
-	/usr/sbin/update-locale LANG=en_IN.UTF-8
+		apt-get install language-pack-en-base
+		/usr/sbin/locale-gen en_IN.UTF-8
+		/usr/sbin/update-locale LANG=en_IN.UTF-8
+
+* Install Java
+
+		apt-get install openjdk-6-jre
+	
+Replicate step 4 on both master and compute nodes. 
+
+(Will prepare an auto-install script.)
+
+**Step 5:** Install SGE
+
+* On Master node do: 
+
+		apt-get install gridengine-client gridengine-qmon gridengine-exec gridengine-master
+	
+	It might throw error message saying that there is a communication error. For example,
+	
+		critical error: abort qmaster registration due to communication errors
+		daemonize error: child exited before sending daemonize state
+	
+	No worries, it might cause by java or previous left-over installation. Check the process, 
+		
+		ps aux | grep sge
+	
+	To see if gridengine-exec is started or not. If there is only gridengine-master, then restart gridengine-exec
+	
+		/etc/init.d/gridengine-exec restart
+		/etc/init.d/gridengine-master restart
+	
+	Then check the process again
+		
+		ps aux | grep sge 
+	
+	Make sure those two processes are up and running. 
+
 
 
 
