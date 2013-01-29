@@ -75,9 +75,15 @@ Replicate step 4 on both master and compute nodes.
 		
 		ps aux | grep sge
 	
-	To see if gridengine-exec is started or not. If there is only gridengine-master, then restart gridengine-exec
+	To see if gridengine-exec is started or not. If there is only gridengine-master, then start gridengine-exec then restart the gridengine-master
 	
-		/etc/init.d/gridengine-exec restart
+		/etc/init.d/gridengine-exec start
+		/etc/init.d/gridengine-master restart
+	
+	However, if there already exists gridengine-exec, then kill it, then start it again. 
+		
+		kill -9 "ID"
+		/etc/init.d/gridengine-exec start
 		/etc/init.d/gridengine-master restart
 	
 	Then check the process again
@@ -86,7 +92,18 @@ Replicate step 4 on both master and compute nodes.
 	
 	Make sure those two processes are up and running. 
 
+* On Compute node do:
 
+		apt-get isntall gridengine-client gridengine-exec
+	
+	An communication error similar to the one above might be thrown again. Thus, gridengine-exec fails to start. This time we will need to manually modify act_qmaster file.
+	
+		echo ajen01.c.qtrinhcloud.internal > /var/lib/gridengine/default/common/act_qmaster
+	
+	Then,
+	
+		/etc/init.d/gridengine_exec start
+	
 
 
 Useful Links
