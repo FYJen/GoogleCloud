@@ -61,6 +61,9 @@ Logon to two instances either by gcutil or ssh.
 		10.240.81.31 ajen01.c.qtrinhcloud.internal ajen01
 		10.240.59.34 ajen02.c.qtrinhcloud.internal ajen02  # Added by Google
 
+		
+		** Basically, it copies the line that is added by Google and pastes to others.
+
 * Update source.list
 	
 		apt-get update 
