@@ -31,8 +31,8 @@ Steps
 	
 	We will need two instances. For example,
 
-		.google_create.sh ajen00
 		.google_create.sh ajen01
+		.google_create.sh ajen02
 
 **Step 4:** Install prerequisites for SGE
 
@@ -122,11 +122,31 @@ Replicate step 4 on both master and compute nodes.
 	
 		echo ajen01.c.qtrinhcloud.internal > /var/lib/gridengine/default/common/act_qmaster
 	
+		 ** Replace "ajen01.c.qtrinhcloud.internal" with the master node. 
 	Then,
 	
 		/etc/init.d/gridengine_exec start
 	
+	If you use qhost on Compute node, it will prompt error messages saying "ajen02" (my Compute node) is not in the access list. This is the indication that the internal communication has been successfully established.
+	
+	Right now we just need to go back to Master node to configure access list, users, groups, and etc. 
 
+* Configure Master node: 
+
+		sudo su
+		sudo -u sgeadmin qconf -am FJen #FJen is my local user: the account I ssh to google cloud.
+		exit
+		qconf -au FJen users
+		qconf -as ajen01
+		qconf -ahgrp @allhosts  # just save the file without modifying it
+		qconf -aattr hostgroup hostlist ajen01 @allhosts
+		qconf -aq main.q # just save the file without modifying it
+		qconf -aattr queue hostlist @allhosts main.q
+		qconf -aattr queue slots "4, [ajen01=3]" main.q  # 4 by default for all nodes, 3 specifically for ajen01, which leaves 1 of the 4 cpus free for the master process
+
+* Configure Compute node:
+
+	
 
 Useful Links
 -----------------
