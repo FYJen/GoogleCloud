@@ -133,20 +133,20 @@ Replicate step 4 on both master and compute nodes.
 		** Definition can be found at - cat /usr/share/doc/gridengine-common/README.Debian
 
 		sudo su
-		sudo -u sgeadmin qconf -am FJen #FJen is my local user: the account I ssh to google cloud.
+		sudo -u sgeadmin qconf -am FJen                     # FJen is my local user: the account I ssh to google cloud. It is suggested that you add yourself as a manager and perform the rest of these tasks as your own user      
 		exit
-		qconf -au FJen users
-		qconf -as ajen01
-		qconf -ahgrp @allhosts  # just save the file without modifying it
-		qconf -aattr hostgroup hostlist ajen01 @allhosts
-		qconf -aq main.q # just save the file without modifying it
-		qconf -aattr queue hostlist @allhosts main.q
-		qconf -aattr queue slots "4, [ajen01=3]" main.q  # 4 by default for all nodes, 3 specifically for ajen01, which leaves 1 of the 4 cpus free for the master process
+		qconf -au FJen users                                # and to a userlist
+		qconf -as ajen01                                    # Add a submission host
+		qconf -ahgrp @allhosts                              # just save the file without modifying it
+		qconf -aattr hostgroup hostlist ajen01 @allhosts    # Add the exec host to the @allhosts list
+		qconf -aq main.q                                    # just save the file without modifying it
+		qconf -aattr queue hostlist @allhosts main.q        # Add the host group to the queue
+		qconf -aattr queue slots "4, [ajen01=3]" main.q     # 4 by default for all nodes, 3 specifically for ajen01, which leaves 1 of the 4 cpus free for the master process
 
 * Configure Compute node:
 
-		qconf -as ajen02
-		qconf -ae # change the hostname entry to ajen02
+		qconf -as ajen02                                    # Add a submission host
+		qconf -ae                                           # Add an execution host. Change the hostname entry to ajen02
 		qconf -aattr hostgroup hostlist ajen02 @allhosts
 
 
