@@ -123,15 +123,14 @@ Replicate step 4 on both master and compute nodes.
 		echo ajen01.c.qtrinhcloud.internal > /var/lib/gridengine/default/common/act_qmaster
 	
 		 ** Replace "ajen01.c.qtrinhcloud.internal" with the master node. 
-	Then,
-	
-		/etc/init.d/gridengine_exec start
 	
 	If you use qhost on Compute node, it will prompt error messages saying "ajen02" (my Compute node) is not in the access list. This is the indication that the internal communication has been successfully established.
 	
 	Right now we just need to go back to Master node to configure access list, users, groups, and etc. 
 
 * Configure Master node: 
+
+		** Definition can be found at - cat /usr/share/doc/gridengine-common/README.Debian
 
 		sudo su
 		sudo -u sgeadmin qconf -am FJen #FJen is my local user: the account I ssh to google cloud.
@@ -146,7 +145,11 @@ Replicate step 4 on both master and compute nodes.
 
 * Configure Compute node:
 
-	
+		qconf -as ajen02
+		qconf -ae # change the hostname entry to ajen02
+		qconf -aattr hostgroup hostlist ajen02 @allhosts
+
+
 
 Useful Links
 -----------------
