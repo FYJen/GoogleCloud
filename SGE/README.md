@@ -148,7 +148,32 @@ Replicate step 4 on both master and compute nodes.
 		qconf -as ajen02                                    # Add a submission host
 		qconf -ae                                           # Add an execution host. Change the hostname entry to ajen02
 		qconf -aattr hostgroup hostlist ajen02 @allhosts
+	
+	Start gridengine_exec on Compute node
+	
+		/etc/init.d/gridengine.exec start
+		
+Testing
+----------
 
+* To test the installtion, we can quickly run,
+
+		qhost 
+	
+	To grab some information about the SGE cluster. 
+	
+	Submit tasks to cluster,
+	
+		qsub /usr/share/doc/gridengine-common/examples/simple.sh
+	
+	To view the process 
+	 	
+	 	qstat 
+	
+	Or for more detailed output
+	
+		qstat -f  
+		
 
 
 Useful Links
