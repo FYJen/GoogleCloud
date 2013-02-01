@@ -183,7 +183,7 @@ Useful Links
 	
 	http://helms-deep.cable.nu/~rwh/blog/?p=159
 
-*Laanguage package:** 
+**Laanguage package:** 
 	
 	http://forum.slicehost.com/index.php?p=/discussion/5065/error-in-locale/p1
 
