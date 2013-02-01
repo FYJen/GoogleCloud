@@ -1,24 +1,16 @@
 Getting Started with Google Cloud
 =================================
 
-In your home directory, create a directory called 'GoogleCloud'.  Then download and install the latest gcutil and gsutil tools 
+In your home directory, clone this repository, which has both gcutil and gsutil: 
 
-        mkdir ~/GoogleCloud
+        cd 
+        git clone https://github.com/qtrinh/GoogleCloud
+      
     
-        cd ~/GoogleCloud ; mkdir gsutil ; cd gsutil ;  wget http://commondatastorage.googleapis.com/pub/gsutil.tar.gz
-        tar xvf gsutil.tar.gz
-    
-        cd ~/GoogleCloud ; mkdir gcutil ; cd gcutil ; wget --no-check-certificate https://google-compute-engine-tools.googlecode.com/files/gcutil-1.5.0.tar.gz
-        tar xvf gcutil-1.5.0.tar.gz
-    
-Add both gcutil and gsutil to your PATH
+Change into GoogleCloud directory and set environments by doing:
 
-        GCUTIL_HOME="$HOME/GoogleCloud/gcutil"
-        export PATH=$GCUTIL_HOME/gcutil-1.5.0:${PATH}
-
-        GSUTIL_HOME="$HOME/GoogleCloud/gsutil"
-        export PATH=$GSUTIL_HOME/gsutil:${PATH}
-
+        cd GoogleCloud
+        . env.sh
 
 Set your environment variable PID to your Google Cloud project ID.  Run 'gcutil auth' to request a token. This command prints a URL where you can acquire an OAuth 2.0 refresh token for Google Compute Engine.
 
