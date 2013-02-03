@@ -1,5 +1,5 @@
 
-DIR=`readlink -f .`
+DIR=`pwd`
 GCUTIL_HOME="$DIR/tools/gcutil"
 export PATH=$GCUTIL_HOME/gcutil-1.5.0:${PATH}
 
