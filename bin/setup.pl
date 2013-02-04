@@ -6,14 +6,17 @@ use warnings;
 
 my $MODE_INSTANCES_CREATE = 1;
 my $MODE_INSTANCES_DELETE = 2;
+my $MODE_UPDATE_ETC_HOSTS = 3;
 
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
-	print "\n\n";
-	print "Usage: $0 [ FILE ] [ INT ] ";
+	print "\n";
+	print "\nThis script creates and deletes Google Cloud instances";
+	print "\n\nUsage: $0 [ FILE ] [ INT ] ";
 	print "\n\n\t[FILE]\t\tconfig file";
 	print "\n\t[INT]\t1\tcreate instances based on the input configuration file";
 	print "\n\t\t2\tdelete instances based on the instance prefix defined in the input configuration file";
+	print "\n\t\t3\tupdate /etc/hosts files for SGE installation";
 	print "\n\n";
 	exit (0);
 }
@@ -38,6 +41,9 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	deleteInstances(\%instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_INSTANCES_CREATE) {
 	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
+} elsif ($mode == $MODE_UPDATE_ETC_HOSTS) {
+	updateEtcHosts(\%instanceNames);
+	
 }
 
 
@@ -112,6 +118,15 @@ sub createInstances {
 	print "\ncreating instances $machineNames ... \n\n";
 	system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
 	
+}
+
+sub updateEtcHosts {
+	my $htable = shift;
+	my %instanceNames = %$htable;
+	while (my ($k,$v) = each %instanceNames){
+		print "\ninstances '$k' ";
+	}
+
 }
 
 # 

@@ -1,7 +1,15 @@
-
+# zone where instances are to be created
 ZONE: us-east1-a
+
+# machine images to be used 
 AMI: ami_123
+
+# instance type 
 # INSTANCE_TYPE: n1-standard-4-d
 INSTANCE_TYPE: n1-highcpu-4-d
-INSTANCE_NAME_PREFIX: qttt
+
+# prefix of instance names 
+INSTANCE_NAME_PREFIX: qt
+
+# number of instances to be created 
 NUMBER_OF_INSTANCES: 2
