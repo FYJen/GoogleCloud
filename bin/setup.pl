@@ -160,12 +160,14 @@ sub deleteInstances {
 	print "\n\n";
 
 }
+
 sub create_mount_ephemeral {
 
 =head 
 ll /dev/disk/by-id/google-ephemeral-disk-*
 sudo mkdir /mnt/scratch/
 sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" /dev/disk/by-id/google-ephemeral-disk-0 /mnt/scratch
+sudo chmod a+w /mnt/scratch
 =cut 
 
 }
