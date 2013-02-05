@@ -1,0 +1,46 @@
+WARNING: us-east1-a will become unavailable due to maintenance in 10 days.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Waiting for insert of ajen1000. Sleeping for 3s.
+INFO: Waiting for insert of ajen1001. Sleeping for 3s.
+INFO: Ensuring ajen1000 is running.  Will wait to start for: 120 seconds.
+INFO: Ensuring ajen1001 is running.  Will wait to start for: 120 seconds.
+
+Table of resources:
+
++----------+----------------+---------------------------------------------+---------+---------------+---------------+-------+------------+------+---------+----------------+
+|   name   |  machine-type  |                    image                    | network |  network-ip   |  external-ip  | disks |    zone    | tags | status  | status-message |
++----------+----------------+---------------------------------------------+---------+---------------+---------------+-------+------------+------+---------+----------------+
+| ajen1000 | n1-highcpu-4-d | projects/google/images/gcel-12-04-v20130104 | default | 10.240.7.33   | 8.34.223.21   |       | us-east1-a |      | RUNNING |                |
+| ajen1001 | n1-highcpu-4-d | projects/google/images/gcel-12-04-v20130104 | default | 10.240.88.244 | 108.59.85.124 |       | us-east1-a |      | RUNNING |                |
++----------+----------------+---------------------------------------------+---------+---------------+---------------+-------+------------+------+---------+----------------+
+
+Table of operations:
+
++------------------------------------------------+--------+----------------+----------+----------------+-------+---------+
+|                      name                      | status | status-message |  target  | operation-type | error | warning |
++------------------------------------------------+--------+----------------+----------+----------------+-------+---------+
+| operation-1360092611335-4d4ff3cf24149-469b5947 | DONE   |                | ajen1000 | insert         |       |         |
+| operation-1360092611356-4d4ff3cf23d61-12203b2d | DONE   |                | ajen1001 | insert         |       |         |
++------------------------------------------------+--------+----------------+----------+----------------+-------+---------+
+WARNING: There is a new version of gcutil available. Go to: https://developers.google.com/compute/docs/gcutil
