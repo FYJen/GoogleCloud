@@ -1,7 +1,7 @@
 
 DIR=`pwd`
 GCUTIL_HOME="$DIR/tools/gcutil"
-export PATH=$GCUTIL_HOME/gcutil-1.5.0:${PATH}
+export PATH=$GCUTIL_HOME/current:${PATH}
 
 GSUTIL_HOME="$DIR/tools/gsutil"
-export PATH=$GSUTIL_HOME/gsutil:${PATH}
+export PATH=$GSUTIL_HOME/current:${PATH}
