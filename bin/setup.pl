@@ -72,6 +72,8 @@ sub SGE_install {
 	my $master_node = (keys %instanceNames)[-1];
 	# Update /etc/hosts file on master node
 	updateEtcHosts(\%instanceNames, $instanceNamePrefix);
+	updateInstance("java");
+	updateInstance("SGE_Master");
 
 
 	#Update /etc/hosts file on every node
