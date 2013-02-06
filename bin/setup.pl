@@ -284,9 +284,9 @@ sub create_mount_ephemeral {
 sub updateInstance {
 
 	my $arg = shift;
-	my $iName = `hostname`;
-	system ("gcutil ssh $iName perl < bin/dependencies.pl $arg");
-
+	#my $iName = `hostname`;
+	#system ("gcutil ssh $iName perl < bin/dependencies.pl $arg");
+	system ("sudo perl bin/dependencies.pl $arg");
 }
 
 sub SGE_filewall {
