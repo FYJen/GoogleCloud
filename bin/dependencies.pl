@@ -30,8 +30,6 @@ sub install_sge_master {
 
 
 if ($arg eq "java") {
-	install_language_package;
-	install_git;
 	install_java;
 } elsif ($arg eq "SGE_Master"){
 	install_sge_master;
