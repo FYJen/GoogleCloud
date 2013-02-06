@@ -37,6 +37,7 @@ print "\n\n";
 print "\nzone $zone";
 print "\nami $ami";
 print "\ninstanceType $instanceType";
+print "\ninstanceCores $instanceCores";
 print "\ninstanceNamePrefix $instanceNamePrefix";
 print "\nnumberOfInstances $numberOfInstances";
 print "\n\n";
@@ -52,8 +53,36 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 } elsif ($mode == $MODE_UPDATE_ETC_HOSTS) {
 	updateEtcHosts(\%instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_MOUNT_EPHEMERAL_DISK) {
-	create_mount_ephemeral($instanceNamePrefix);
+	create_mount_ephemeral(\%instanceNames, $instanceNamePrefix);
 }
+
+#
+#
+#
+sub SGE_install {
+
+	my $htable = shift;
+	my %instanceNames = %$htable; 
+
+
+	#Install SGE on master node
+	#===================================
+
+	# Pick the first entrey in the hash as master node
+	my $master_node = (keys %instanceNames)[-1];
+	# Update /etc/hosts file on master node
+	updateEtcHosts(\%instanceNames, $instanceNamePrefix);
+
+
+	#Update /etc/hosts file on every node
+	while (my ($k,$v) = each %instanceNames) {
+		
+	}
+}
+
+
+
+
 
 
 #
@@ -68,10 +97,12 @@ sub getInstanceNames {
 		# trim whitespaces 
 		$n =~ s/^\s+//;
 		$n =~ s/\s+$//;
-		$iNames{$n} = 1;
+		if ($n =~ /$instanceNamePrefix/) {
+			$iNames{$n} = 1;	
+		}
 	}
 	while (my ($k,$v) = each %iNames){
-		print "\nRunning instances '$k' ";
+		print "\nRunning instances '$k' \n";
 	}
 	return %iNames;
 }
@@ -131,17 +162,6 @@ sub createInstances {
 	system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
 }
 
-
-=head
-sub updateInstance {
-
-	system ("sudo /usr/sbin/locale-gen en_IN.UTF-8"); 
-	system ("sudo /usr/sbin/update-locale LANG=en_IN.UTF-8");
-	system ("sudo apt-get install language-pack-en-base");
-	system ("sudo apt-get update");
-	system ("sudo apt-get install git");
-}
-=cut
 
 #
 # update /etc/hosts to include other hostnames and IP address
@@ -247,12 +267,12 @@ sub deleteInstances {
 
 sub create_mount_ephemeral {
 
+	my $htable = shift;
+	my %instanceNames = %$htable;
 	my $instancePrefix = shift;
 
 	while (my ($k,$v) = each %instanceNames) {
-		if ($k =~ /^$instancePrefix/) {
-			system ("gcutil ssh $k perl < bin/mount_ephemeral.pl");	
-		}
+		system ("gcutil ssh $k perl < bin/mount_ephemeral.pl");	
 	}
 	print "\n\nDone ...\n\n";
 
@@ -261,11 +281,16 @@ sub create_mount_ephemeral {
 
 sub updateInstance {
 
+	my $arg = shift;
+
 	while (my ($k,$v) = each %instanceNames) {
-		system ("gcutil ssh $k perl < bin/dependencies.pl")
+		system ("gcutil ssh $k perl < bin/dependencies.pl $arg")
 	}
 
 }
 
-
+sub SGE_filewall {
+	system("gcutil addfirewall sge6444 --description=\"Incoming 6444 allowed.\" --allowed=\"tcp:6444\"");
+	system("gcutil addfirewall sge6445 --description=\"Incoming 6445 allowed.\" --allowed=\"tcp:6445\"");
+}
 
