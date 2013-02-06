@@ -253,7 +253,7 @@ sudo chmod a+w /mnt/scratch
 sub dependencies_installation {
 
 	while (my ($k,$v) = each %instanceNames) {
-		system ("gcutil ssh $k bash -s < bin/dependencies.sh")
+		system ("gcutil ssh $k bash -s < bin/dependencies.pl")
 	}
 
 }
