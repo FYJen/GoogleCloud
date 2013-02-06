@@ -25,7 +25,7 @@ sub install_java {
 }
 
 sub install_sge_master {
-	system ("sudo apt-get install gridengine-client gridengine-qmon gridengine-exec gridengine-master");
+	system ("sudo apt-get -y install gridengine-client gridengine-qmon gridengine-exec gridengine-master");
 }
 
 
