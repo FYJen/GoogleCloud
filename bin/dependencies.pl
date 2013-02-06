@@ -12,4 +12,10 @@ sub install_language_package {
 
 }
 
+sub install_git {
+	system ("sudo apt-get -y install git")
+}
+
+
 install_language_package;
+install_git;
