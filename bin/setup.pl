@@ -129,7 +129,7 @@ sub createInstances {
 sub updateInstance {
 
 	system ("sudo /usr/sbin/locale-gen en_IN.UTF-8"); 
-	system ("sudo /usr/sbin/update-locale LANG=en_IN.UTF-8";
+	system ("sudo /usr/sbin/update-locale LANG=en_IN.UTF-8");
 	system ("sudo apt-get install language-pack-en-base");
 	system ("sudo apt-get update");
 	system ("sudo apt-get install git");
