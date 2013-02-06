@@ -12,4 +12,4 @@ sub install_language_package {
 
 }
 
-install_language_package;
+install_language_package();
