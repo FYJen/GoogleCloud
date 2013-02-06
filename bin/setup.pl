@@ -8,9 +8,10 @@ my $MODE_INSTANCES_CREATE = 100;
 my $MODE_INSTANCES_DELETE = 101;
 
 # instance specific 
-my $MODE_UPDATE_INSTANCE = 200;
-my $MODE_UPDATE_ETC_HOSTS = 201;
-my $MODE_MOUNT_EPHEMERAL_DISK = 202;
+my $MODE_INSTALL_SGE = 200;
+my $MODE_UPDATE_INSTANCE = 201;
+my $MODE_UPDATE_ETC_HOSTS = 202;
+my $MODE_MOUNT_EPHEMERAL_DISK = 203;
 
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
@@ -20,6 +21,7 @@ if ($num_args != 2) {
 	print "\n\n\t[FILE]\t\tconfig file";
 	print "\n\t[INT]\t$MODE_INSTANCES_CREATE\tcreate instances based on the input configuration file";
 	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete instances based on the instance prefix defined in the input configuration file";
+	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
 	print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
 	print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
 	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount ephemeral disk to individual server";
@@ -48,8 +50,10 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	deleteInstances(\%instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_INSTANCES_CREATE) {
 	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
-} elsif ($mode == $MODE_UPDATE_INSTANCE) {
-	updateInstance();
+} elsif ($mode == $MODE_INSTALL_SGE) {
+	SGE_install(\%instanceNames, $instanceNamePrefix);
+}elsif ($mode == $MODE_UPDATE_INSTANCE) {
+	updateInstance(\%instanceNames);
 } elsif ($mode == $MODE_UPDATE_ETC_HOSTS) {
 	updateEtcHosts(\%instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_MOUNT_EPHEMERAL_DISK) {
@@ -62,18 +66,17 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 sub SGE_install {
 
 	my $htable = shift;
-	my %instanceNames = %$htable; 
+	my %instanceNames = %$htable;
+	my $instanceNamePrefix = shift; 
 
 
 	#Install SGE on master node
 	#===================================
-
-	# Pick the first entrey in the hash as master node
-	my $master_node = (keys %instanceNames)[-1];
+	my $master_node = `hostname`;
 	# Update /etc/hosts file on master node
 	updateEtcHosts(\%instanceNames, $instanceNamePrefix);
-	updateInstance("java");
-	updateInstance("SGE_Master");
+	install_package("java");
+	install_package("SGE_Master");
 
 
 	#Update /etc/hosts file on every node
@@ -280,19 +283,32 @@ sub create_mount_ephemeral {
 
 }
 
-
+#
 sub updateInstance {
 
-	my $arg = shift;
-	#my $iName = `hostname`;
-	#system ("gcutil ssh $iName perl < bin/dependencies.pl $arg");
-	system ("sudo perl bin/dependencies.pl $arg");
+	my $htable = shift;
+	my %instanceNames = %$htable;
+
+	while (my ($k,$v) = each %instanceNames) {
+		system ("gcutil ssh $k perl < bin/dependencies.pl");	
+	}
+
 }
 
+#
 sub install_package {
-	
+
+	my $arg = shift;
+	system ("sudo perl bin/dependencies.pl $arg");
+
 }
 
+#
+sub make_internal_ssh_available {
+
+}
+
+#
 sub SGE_filewall {
 	system("gcutil addfirewall sge6444 --description=\"Incoming 6444 allowed.\" --allowed=\"tcp:6444\"");
 	system("gcutil addfirewall sge6445 --description=\"Incoming 6445 allowed.\" --allowed=\"tcp:6445\"");
