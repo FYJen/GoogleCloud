@@ -238,7 +238,6 @@ sub deleteInstances {
 
 
 
-
 sub create_mount_ephemeral {
 
 =head 
@@ -249,3 +248,11 @@ sudo chmod a+w /mnt/scratch
 =cut 
 }
 
+
+sub dependencies_installation {
+
+	while (my ($k,$v) = each %instanceNames) {
+		system ("gcutil ssh $k bash -s < bin/dependencies.sh")
+	}
+
+}
