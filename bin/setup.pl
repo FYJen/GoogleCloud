@@ -10,6 +10,7 @@ my $MODE_INSTANCES_DELETE = 101;
 # instance specific 
 my $MODE_UPDATE_INSTANCE = 200;
 my $MODE_UPDATE_ETC_HOSTS = 201;
+my $MODE_MOUNT_EPHEMERAL_DISK = 202;
 
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
@@ -21,6 +22,7 @@ if ($num_args != 2) {
 	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete instances based on the instance prefix defined in the input configuration file";
 	print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
 	print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
+	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount ephemeral disk to individual server";
 	print "\n\n";
 	exit (0);
 }
@@ -49,6 +51,8 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	updateInstance();
 } elsif ($mode == $MODE_UPDATE_ETC_HOSTS) {
 	updateEtcHosts(\%instanceNames, $instanceNamePrefix);
+} elsif ($mode == $MODE_MOUNT_EPHEMERAL_DISK) {
+	create_mount_ephemeral($instanceNamePrefix);
 }
 
 
@@ -241,12 +245,14 @@ sub deleteInstances {
 
 sub create_mount_ephemeral {
 
-=head 
-ll /dev/disk/by-id/google-ephemeral-disk-*
-sudo mkdir /mnt/scratch/
-sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" /dev/disk/by-id/google-ephemeral-disk-0 /mnt/scratch
-sudo chmod a+w /mnt/scratch
-=cut 
+	my $instancePrefix = shift;
+
+	while (my ($k,$v) = each %instanceNames) {
+		if ($k =~ /^$instancePrefix/) {
+			system ("gcutil ssh $k perl < bin/mount_ephemeral.pl");	
+		}
+	}
+
 }
 
 
