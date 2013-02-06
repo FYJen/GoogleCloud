@@ -1,4 +1,6 @@
-
+######################################################################
+### Please make following modifications according to your needs. #####
+######################################################################
 #
 # zone where instances are to be created
 ZONE: us-east1-a
@@ -19,3 +21,9 @@ INSTANCE_NAME_PREFIX: ajen
 
 # number of instances to be created 
 NUMBER_OF_INSTANCES: 2
+
+
+######################################################################
+### Please make following modifications according to your needs. #####
+######################################################################
+
