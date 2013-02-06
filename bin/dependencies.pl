@@ -6,10 +6,10 @@ use warnings;
 sub install_language_package {
 	
 	system ("sudo apt-get update");
-	system ("sudo apt-get install language-pack-en-base");
+	system ("sudo apt-get -y install language-pack-en-base");
 	system ("sudo /usr/sbin/locale-gen en_IN.UTF-8");
 	system ("sudo /usr/sbin/update-locale LANG=en_IN.UTF-8");
 
 }
 
-install_language_package();
+install_language_package;
