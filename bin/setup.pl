@@ -126,6 +126,7 @@ sub createInstances {
 }
 
 
+=head
 sub updateInstance {
 
 	system ("sudo /usr/sbin/locale-gen en_IN.UTF-8"); 
@@ -134,7 +135,7 @@ sub updateInstance {
 	system ("sudo apt-get update");
 	system ("sudo apt-get install git");
 }
-
+=cut
 
 #
 # update /etc/hosts to include other hostnames and IP address
