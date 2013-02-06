@@ -1,3 +1,5 @@
+
+#
 # zone where instances are to be created
 ZONE: us-east1-a
 

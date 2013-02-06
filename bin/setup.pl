@@ -24,9 +24,9 @@ if ($num_args != 2) {
 my $configFile = $ARGV[0];
 my $mode = $ARGV[1];
 
-
 my ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances) = parseConfigFile($configFile);
 
+# for debugging 
 print "\n\n";
 print "\nzone $zone";
 print "\nami $ami";
@@ -42,8 +42,7 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 } elsif ($mode == $MODE_INSTANCES_CREATE) {
 	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
 } elsif ($mode == $MODE_UPDATE_ETC_HOSTS) {
-	updateEtcHosts(\%instanceNames);
-	
+	updateEtcHosts(\%instanceNames, $instanceNamePrefix);
 }
 
 
@@ -66,6 +65,7 @@ sub getInstanceNames {
 	}
 	return %iNames;
 }
+
 
 #
 # parse input config file
@@ -95,7 +95,6 @@ sub parseConfigFile {
 		} elsif($i =~ /^NUMBER_OF_INSTANCES:/) {
 			$numberOfInstances = $line[1];	
 		}
-
 	}
 	close FILE;
 	return ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
@@ -105,6 +104,7 @@ sub parseConfigFile {
 # create instances
 sub createInstances {
 
+	# counter starting from 1000
 	my $counter = 1000;
 	my $machineName ;
 	my $machineNames = "";
@@ -117,16 +117,24 @@ sub createInstances {
 	print "\n\n\n====================================================\n";
 	print "\ncreating instances $machineNames ... \n\n";
 	system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
-	
 }
 
+# update /etc/hosts 
 sub updateEtcHosts {
 	my $htable = shift;
 	my %instanceNames = %$htable;
-	while (my ($k,$v) = each %instanceNames){
-		print "\ninstances '$k' ";
-	}
+	my $instancePrefix = shift;
 
+	if (!keys %instanceNames) {
+		print "\n\n\n====================================================\n";
+		print "\nno running instances to delete ... \n\n";
+		return ;
+	}
+	while (my ($k,$v) = each %instanceNames){
+		if ($k =~ /$instancePrefix/) {
+			print "\ninstances matches prefix in config '$k' ";
+		}
+	}
 }
 
 # 
@@ -158,8 +166,10 @@ sub deleteInstances {
 		print "\nNo instances with prefix '$$instanceNamePrefix' exist ...";
 	}
 	print "\n\n";
-
 }
+
+
+
 
 sub create_mount_ephemeral {
 
@@ -169,5 +179,5 @@ sudo mkdir /mnt/scratch/
 sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" /dev/disk/by-id/google-ephemeral-disk-0 /mnt/scratch
 sudo chmod a+w /mnt/scratch
 =cut 
-
 }
+
