@@ -289,6 +289,10 @@ sub updateInstance {
 	system ("sudo perl bin/dependencies.pl $arg");
 }
 
+sub install_package {
+	
+}
+
 sub SGE_filewall {
 	system("gcutil addfirewall sge6444 --description=\"Incoming 6444 allowed.\" --allowed=\"tcp:6444\"");
 	system("gcutil addfirewall sge6445 --description=\"Incoming 6445 allowed.\" --allowed=\"tcp:6445\"");
