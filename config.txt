@@ -10,8 +10,12 @@ AMI: ami_123
 # INSTANCE_TYPE: n1-standard-4-d
 INSTANCE_TYPE: n1-highcpu-4-d
 
+# instance cores
+#It is the last or seconde digit of your instance type. 
+INSTANCE_CORES: 4
+
 # prefix of instance names 
-INSTANCE_NAME_PREFIX: qt
+INSTANCE_NAME_PREFIX: ajen
 
 # number of instances to be created 
 NUMBER_OF_INSTANCES: 2

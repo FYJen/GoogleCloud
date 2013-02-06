@@ -30,7 +30,7 @@ if ($num_args != 2) {
 my $configFile = $ARGV[0];
 my $mode = $ARGV[1];
 
-my ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances) = parseConfigFile($configFile);
+my ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances) = parseConfigFile($configFile);
 
 # for debugging 
 print "\n\n";
@@ -100,6 +100,8 @@ sub parseConfigFile {
 			$ami = $line[1];	
 		} elsif($i =~ /^INSTANCE_TYPE:/) {
 			$instanceType = $line[1];	
+		} elsif($i =~ /^INSTANCE_CORES:/){
+			$instanceCores = $line[1];
 		} elsif($i =~ /^INSTANCE_NAME_PREFIX:/) {
 			$instanceNamePrefix = $line[1];	
 		} elsif($i =~ /^NUMBER_OF_INSTANCES:/) {
@@ -107,7 +109,7 @@ sub parseConfigFile {
 		}
 	}
 	close FILE;
-	return ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
+	return ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances);
 }
 
 
@@ -252,6 +254,7 @@ sub create_mount_ephemeral {
 			system ("gcutil ssh $k perl < bin/mount_ephemeral.pl");	
 		}
 	}
+	print "\n\nDone ...\n\n";
 
 }
 
@@ -263,3 +266,6 @@ sub updateInstance {
 	}
 
 }
+
+
+
