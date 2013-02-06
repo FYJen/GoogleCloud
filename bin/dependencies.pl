@@ -3,6 +3,9 @@
 use strict;
 use warnings;
 
+my $arg = $ARGV[0];
+
+
 sub install_language_package {
 	
 	system ("sudo apt-get update");
@@ -15,6 +18,11 @@ sub install_language_package {
 sub install_git {
 	system ("sudo apt-get -y install git")
 }
+
+sub install_java{
+	system ("sudo apt-get -y install openjdk-6-jre");
+}
+
 
 
 install_language_package;
