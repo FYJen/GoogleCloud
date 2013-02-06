@@ -284,10 +284,7 @@ sub create_mount_ephemeral {
 sub updateInstance {
 
 	my $arg = shift;
-
-	while (my ($k,$v) = each %instanceNames) {
-		system ("gcutil ssh $k perl < bin/dependencies.pl $arg")
-	}
+	system ("gcutil ssh $k perl < bin/dependencies.pl $arg");
 
 }
 
