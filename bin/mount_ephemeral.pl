@@ -11,10 +11,13 @@ sub mount_ephemeral_disk {
 	my $disk = "";
 
 	for (my $i = 0; $i < $Num_Disk; $i++) {
-		$disk = $DiskList[$i];
+		
+		#trim traling newline characters
+		$DiskList[$i] =~ s/\n+$//;
+
 		system("sudo mkdir -p /mnt/scratch$i/");
-		system("sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" $disk /mnt/scratch$i");
 		system("sudo chmod a+w /mnt/scratch$i");
+		system("sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" $DiskList[$i] /mnt/scratch$i");
 	}
 }
 
