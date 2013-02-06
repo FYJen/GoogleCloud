@@ -79,6 +79,8 @@ sub SGE_install {
 	install_package("SGE_Master");
 
 
+	#Install SGE on Compute node
+	#=================================
 	#Update /etc/hosts file on every node
 	while (my ($k,$v) = each %instanceNames) {
 		
