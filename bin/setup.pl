@@ -69,10 +69,10 @@ sub SGE_install {
 	my %instanceNames = %$htable;
 	my $instanceNamePrefix = shift; 
 
+	my $master_node = `hostname`;
 
 	#Install SGE on master node
 	#===================================
-	my $master_node = `hostname`;
 	# Update /etc/hosts file on master node
 	updateEtcHosts(\%instanceNames, $instanceNamePrefix);
 	install_package("java");
@@ -81,9 +81,10 @@ sub SGE_install {
 
 	#Install SGE on Compute node
 	#=================================
-	#Update /etc/hosts file on every node
 	while (my ($k,$v) = each %instanceNames) {
-		
+		if ( $k != $master_node) {
+			install_package("SGE_Compute", $k);
+		}
 	}
 }
 
@@ -151,25 +152,6 @@ sub parseConfigFile {
 }
 
 
-# create instances
-sub createInstances {
-
-	# counter starting from 1000
-	my $counter = 1000;
-	my $machineName ;
-	my $machineNames = "";
-	my ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances) = @_;
-	for (my $n = 1; $n <= $numberOfInstances; $n++) {
-		$machineName = $instanceNamePrefix . $counter ;
-		$machineNames = $machineNames . $machineName . " ";
-		$counter++;
-	}
-	print "\n\n\n====================================================\n";
-	print "\ncreating instances $machineNames ... \n\n";
-	system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
-}
-
-
 #
 # update /etc/hosts to include other hostnames and IP address
 #
@@ -186,14 +168,6 @@ sub updateEtcHosts {
 		print "\nno running instances to update /etc/hosts ... \n\n";
 		return ;
 	}
-=head
-	my $iNames_table = Dumper(\%instanceNames);
-	my $IP_table = Dumper(\%IPAddresses);
-
-	while (my ($k,$v) = each %instanceNames) {
-		system ("ssh $k perl -s < bin/update_etc_hosts.pl $iNames_table $instancePrefix $IP_table");
-	}
-=cut
 
 	# get current host name 
 	my $myHostName = `hostname`;
@@ -226,6 +200,16 @@ sub updateEtcHosts {
 	close $new;
 	rename '/etc/hosts.new','/etc/hosts';
 
+
+=head
+	my $iNames_table = Dumper(\%instanceNames);
+	my $IP_table = Dumper(\%IPAddresses);
+
+	while (my ($k,$v) = each %instanceNames) {
+		system ("ssh $k perl -s < bin/update_etc_hosts.pl $iNames_table $instancePrefix $IP_table");
+	}
+=cut
+
 }
 
 # 
@@ -248,8 +232,29 @@ sub getIPAddress {
 	return %IP;
 }
 
-# 
 #
+# create instances
+#
+sub createInstances {
+
+	# counter starting from 1000
+	my $counter = 1000;
+	my $machineName ;
+	my $machineNames = "";
+	my ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances) = @_;
+	for (my $n = 1; $n <= $numberOfInstances; $n++) {
+		$machineName = $instanceNamePrefix . $counter ;
+		$machineNames = $machineNames . $machineName . " ";
+		$counter++;
+	}
+	print "\n\n\n====================================================\n";
+	print "\ncreating instances $machineNames ... \n\n";
+	system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
+}
+
+
+# 
+# delete instance
 #
 sub deleteInstances {
 
@@ -309,13 +314,26 @@ sub updateInstance {
 #
 sub install_package {
 
-	my $arg = shift;
-	system ("sudo perl bin/dependencies.pl $arg");
+	my $num_arg = @ARGV;
+
+	if ($num_arg == 1) {
+		my $pkg_name = shift;
+		system ("sudo perl bin/dependencies.pl $pkg_name");
+	} else {
+		my $pkg_name = shift;
+		my $iName = shift;
+		system ("ssh $iName perl < bin/dependencies.pl $pkg_name");
+	}
 
 }
 
 #
 sub make_internal_ssh_available {
+	
+	my $iName = shift;
+	system ("eval `ssh-agent`");
+	system ("ssh-add ~/.ssh/google_compute_engine");
+	system ("gcutil ssh $iName");
 
 }
 
