@@ -4,8 +4,8 @@ use Data::Dumper;
 use strict;
 use warnings;
 
-my $arg = $ARGV[0];
 
+my $arg = $ARGV[0];
 
 sub general_package {
 	
@@ -23,6 +23,7 @@ sub install_java {
 
 sub install_sge_master {
 	system ("sudo apt-get -y install gridengine-client gridengine-qmon gridengine-exec gridengine-master");
+	system ("sudo /etc/init.d/gridengine-exec start");
 }
 
 sub install_sge_compute {

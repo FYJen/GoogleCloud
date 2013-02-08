@@ -186,6 +186,14 @@ sub updateEtcHosts {
 		print "\nno running instances to update /etc/hosts ... \n\n";
 		return ;
 	}
+=head
+	my $iNames_table = Dumper(\%instanceNames);
+	my $IP_table = Dumper(\%IPAddresses);
+
+	while (my ($k,$v) = each %instanceNames) {
+		system ("ssh $k perl -s < bin/update_etc_hosts.pl $iNames_table $instancePrefix $IP_table");
+	}
+=cut
 
 	# get current host name 
 	my $myHostName = `hostname`;
@@ -217,6 +225,7 @@ sub updateEtcHosts {
  	print $new $additions ."\n";
 	close $new;
 	rename '/etc/hosts.new','/etc/hosts';
+
 }
 
 # 
