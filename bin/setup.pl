@@ -70,6 +70,7 @@ sub SGE_install {
 	my $instanceNamePrefix = shift; 
 
 	my $master_node = `hostname`;
+	chomp($master_node);
 
 	#Install SGE on master node
 	#===================================
@@ -82,7 +83,7 @@ sub SGE_install {
 	#Install SGE on Compute node
 	#=================================
 	while (my ($k,$v) = each %instanceNames) {
-		if ( $k != $master_node) {
+		if ( $k ne $master_node) {
 			install_package("SGE_Compute", $k);
 		}
 	}
@@ -200,7 +201,6 @@ sub updateEtcHosts {
 	close $new;
 	rename '/etc/hosts.new','/etc/hosts';
 
-
 =head
 	my $iNames_table = Dumper(\%instanceNames);
 	my $IP_table = Dumper(\%IPAddresses);
@@ -314,15 +314,13 @@ sub updateInstance {
 #
 sub install_package {
 
-	my $num_arg = @ARGV;
+	my $pkg_name = shift;
+	my $iName = shift;
 
-	if ($num_arg == 1) {
-		my $pkg_name = shift;
+	if ($iName eq "") {
 		system ("sudo perl bin/dependencies.pl $pkg_name");
 	} else {
-		my $pkg_name = shift;
-		my $iName = shift;
-		system ("ssh $iName perl < bin/dependencies.pl $pkg_name");
+		system ("ssh $iName bin/dependencies.pl $pkg_name");
 	}
 
 }
