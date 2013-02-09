@@ -5,13 +5,13 @@ This GitHub repository contains a quick reference for getting started with Googl
 
 Documentations
 =====================
-General Google Compute Engine docs: https://developers.google.com/compute/docs/
+[General Google Compute Engine docs](https://developers.google.com/compute/docs/)
 
-Google Compute Engine tool ( gcutil ): https://developers.google.com/compute/docs/gcutil/
+[Google Compute Engine tool ( gcutil )](https://developers.google.com/compute/docs/gcutil/)
 
-Google Cloud Storage tool ( gsutil ): https://developers.google.com/storage/docs/gsutil
+[Google Cloud Storage tool ( gsutil )](https://developers.google.com/storage/docs/gsutil)
 
 Quick Guide on Getting Started with Google Cloud
 ================================================
 
-  setup gcutil and gsutil tools ; create and terminate an instance - see https://github.com/qtrinh/GoogleCloud/blob/master/docs/getting.started.with.Google.Cloud.md
+  [setup gcutil and gsutil tools ; create and terminate an instance](https://github.com/qtrinh/GoogleCloud/blob/master/docs/getting.started.with.Google.Cloud.md)
