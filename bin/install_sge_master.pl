@@ -6,6 +6,7 @@ use warnings;
 
 my local_user = `users`;
 chomp($local_user);
+my num_arg = $#ARGV + 1;
 my @arg = ();
 
 # Read in arguments and put them into array
