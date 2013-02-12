@@ -4,45 +4,148 @@ use Data::Dumper;
 use strict;
 use warnings;
 
+#Global Variables:
+#===============================
+
+# System envrionment variables
 my local_user = `users`;
 chomp($local_user);
-my num_arg = $#ARGV + 1;
-my @arg = ();
+my host_name = `hostname`;
+chomp($host_name);
 
+# SGE tmp queue file name
+my queue_file = "new_queue";
+# SGE queue's name
+my queue_name = "GC_main.q";
+# SGE tmp exe_host file name
+my exe_file = "exe_host";
+
+# Number of cores 
+my $TotalCores = shift;
+my $ReserCores = $TotalCores - 1;
+
+# Number of arguements 
+my num_arg = $#ARGV;
+my @arg = ();
 # Read in arguments and put them into array
 for (my $i = 0; $i < $num_arg; $i++) {
         my $input = shift;
         push(@arg, $input);
 }
 
+# Functions
+#======================================
 
-sub install_sge_master {
+#
+# Purpose: edit SGE config files
+# Parameters: file_name, find_string, replace_string
+#
+sub edit_file {
+	
+	my $file_name = shift;
+	my $find_string = shift;
+	my $replace_string = shift;
 
-	# Install general package
+	open (FILE, "+<$file_name");
+	my @file = <FILE>;
+
+	seek (FILE, 0, 0);
+
+	foreach my $line (@file) {
+        $line =~ s/$find_string/$replace_string/g;
+        print FILE $line;
+	}
+	close FILE;
+}
+
+#
+# Purpose: generate template from existing SGE config file
+# Parameters: $file_name
+#
+sub generate_template {
+	
+	my $file_name = shift;
+	open my $in, '<', $file_name or die "Can't read old file: $!";
+	open my $out, '>', "$file_name.new" or die "Can't read new file: $!";
+	while( <$in> ) {
+    	next if /^(load_values|\s+)/;  # skip comment lines
+    	last if /^processors/;  # stop at end of line starting with "processors"
+    	print $out $_;
+    }
+    # print the rest of the lines	
+	while( <$in> ) {
+    	print $out $_;
+	}
+	close $out;
+	rename "$file_name.new", "$file_name";
+}
+
+
+
+# Function call: Install SGE on Master node
+#===================================================
+
+# Install general package
 	system ("sudo apt-get update");
 	system ("sudo apt-get -y install language-pack-en-base");
 	system ("sudo /usr/sbin/locale-gen en_IN.UTF-8");
 	system ("sudo /usr/sbin/update-locale LANG=en_IN.UTF-8");
+	
+# Install Git
 	system ("sudo apt-get -y install git")
 
-	# Install JAVA
+# Install JAVA
 	system ("sudo apt-get -y install openjdk-6-jre");
-	# Install SGE packages
+# Install SGE packages
 	system ("sudo apt-get -y install gridengine-client gridengine-qmon gridengine-exec gridengine-master");
-	# Start SGE
+# Start SGE
 	system ("sudo /etc/init.d/gridengine-exec start");
 
-	# Configure SGE
+
+# Configure SGE 
+# Add local user to admin 
 	system ("sudo su");
 	system ("sudo -u sgeadmin qconf -am $local_user");
 	system ("exit");
 	system ("qconf -au $local_user users");
-	  # Add every compute node as a submission host
+
+# Add a host group
+	system ("echo -e \"group_name @allhosts\nhostlist NONE\" > host_group");
+	system ("qconf -Ahgrp host_group");
+
+# Add execution hosts
+	system ("qconf -se $host_name > $exe_file")
+	generate_template($exe_file);
+	#Use the template to add all the exec hosts.
 	foreach my $k (@arg) {
-		system ("qconf -as $k");
+		# master_node is already an exec hosts so we don't need to add it
+		if ($k ne $host_name) {
+			edit_file($exe_file, $host_name, $k);
+		}
+		system ("qconf -Ae $exe_file");
 	}
 
+# Configure Sub host and Exe host 	
+	foreach my $k (@arg) {
+	  # Add every compute node as a submission host
+		system ("qconf -as $k");
+	  # Add exec host to the @allhosts list
+		system ("qconf -aattr hostgroup hostlist $k @allhosts");
+	} 
 
-}
+# Create Queue
+	system ("qconf -sq > $queue_file");
+	# Open new_queue file and edit queue name
+	edit_file($queue_file, "template", $queue_name);
+	system ("qconf -Aq $queue_file");
 
-install_sge_master;
+# Add host group to a queue
+	system ("qconf -aattr queue hostlist @allhosts $queue_name");
+
+# Configure reserved cpu on master node
+	system ("qconf -aattr queue slots \"$TotalCores, [$host_name=$ReserCores]\" $queue_name");
+
+
+
+
+
