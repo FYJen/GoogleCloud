@@ -60,7 +60,7 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	# Mount ephemeral disks
 	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_INSTALL_SGE) {
-	create_SGE();
+	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $instanceCores);
 }
 
 
@@ -190,20 +190,21 @@ sub create_mount_ephemeral {
 
 #
 # Purpose: Create SGE 
-# Parameters: @instanceName, $configFileName, $
+# Parameters: @instanceNames, $configFile, $instanceNamePrefix, $instanceCores
+#
 sub create_SGE {
 	
 	my $array = shift;
 	my @instanceNames = @$array;
-	my $configFileName = shift;
-	my $instancePrefix = shift;
+	my $configFile = shift;
+	my $instanceNamePrefix = shift;
 	my $instanceCores = shift; 
 
 	
 	my $num_instance = @instanceNames;
 	if ( $num_instance == 0) {
 		print "\n\n\n====================================================\n";
-		print "\nNo runing instances with prefix - \"$instancePrefix\" exist to install SGE...\n\n";
+		print "\nNo runing instances with prefix - \"$instanceNamePrefix\" exist to install SGE...\n\n";
 		return ;
 	}
 
@@ -212,8 +213,8 @@ sub create_SGE {
 	my $compute_nodes = "";
 
 	foreach my $k (@instanceNames) {
-		if ($k eq $master_node) {
-			
+		
+		if ($k eq $master_node) {	
 			my @cNode = @instanceNames;
 			# Join the elements from an array and return a scalar
 			my $node_list = join(" ", @cNode);
@@ -229,7 +230,7 @@ sub create_SGE {
 	}
 
 	# Write master_node and compute_node to config.txtfile
-	open (FILE, ">>$configFileName") or die "Could not find ${configFileName}\n";
+	open (FILE, ">>$configFile") or die "Could not find ${configFile}\n";
 	print FILE "\n\nmaster_node: $master_node\n";
 	print FILE "compute_nodes: $compute_nodes\n\n";
 	close(FILE);
