@@ -10,6 +10,7 @@ my $MODE_INSTANCES_DELETE = 101;
 # instance specific 
 my $MODE_UPDATE_INSTANCE = 200;
 my $MODE_MOUNT_EPHEMERAL_DISK = 201;
+my $MODE_INSTALL_SGE = 203;
 
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
@@ -19,10 +20,10 @@ if ($num_args != 2) {
 	print "\n\n\t[FILE]\t\tconfig file";
 	print "\n\t[INT]\t$MODE_INSTANCES_CREATE\tcreate instances based on the input configuration file";
 	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete instances based on the instance prefix defined in the input configuration file";
-	#print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
 	print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
 	#print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
 	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount ephemeral disk to individual server";
+	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
 	print "\n\n";
 	exit (0);
 }
@@ -58,6 +59,8 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 } elsif ($mode == $MODE_MOUNT_EPHEMERAL_DISK) {
 	# Mount ephemeral disks
 	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix);
+} elsif ($mode == $MODE_INSTALL_SGE) {
+	create_SGE();
 }
 
 
@@ -185,29 +188,16 @@ sub create_mount_ephemeral {
 
 }
 
-
-sub install_package {
-
-	my $pkg_name = shift;
-	my $iName = shift;
-
-	if ($iName eq "") {
-		system ("sudo perl bin/dependencies.pl $pkg_name");
-	} else {
-		system ("ssh $iName bin/dependencies.pl $pkg_name");
-	}
-
-}
-
-
 #
-# Create SGE 
-#
+# Purpose: Create SGE 
+# Parameters: @instanceName, $configFileName, $
 sub create_SGE {
+	
 	my $array = shift;
 	my @instanceNames = @$array;
 	my $configFileName = shift;
 	my $instancePrefix = shift;
+	my $instanceCores = shift; 
 
 	
 	my $num_instance = @instanceNames;
@@ -225,10 +215,10 @@ sub create_SGE {
 		if ($k eq $master_node) {
 			
 			my @cNode = @instanceNames;
-			# Join the elements in the array and return a scalar
-			$node_list = join(" ", @cNode);
+			# Join the elements from an array and return a scalar
+			my $node_list = join(" ", @cNode);
 			
-			system ("gcutil ssh $k 'cat | perl /dev/stdin $node_list' < bin/install_sge_master.pl");
+			system ("gcutil ssh $k 'cat | perl /dev/stdin $instanceCores $node_list' < bin/install_sge_master.pl");
 		} else {
 			# Collect compute nodes
 			$compute_nodes = $compute_nodes.$k." ";
