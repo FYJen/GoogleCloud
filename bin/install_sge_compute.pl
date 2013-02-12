@@ -18,6 +18,8 @@ sub install_sge_compute {
 	system ("sudo apt-get -y install language-pack-en-base");
 	system ("sudo /usr/sbin/locale-gen en_IN.UTF-8");
 	system ("sudo /usr/sbin/update-locale LANG=en_IN.UTF-8");
+	
+	# Install Git
 	system ("sudo apt-get -y install git")
 
 	# Install JAVA
@@ -25,7 +27,7 @@ sub install_sge_compute {
 	# Install Sun Grid Engin package
 	system ("sudo apt-get -y install gridengine-client gridengine-exec");
 
-	#Add mast node to SGE act_qmaster file
+	#Add master node to SGE act_qmaster file
 	my $master_hostName = $hostNameFull;
 	$master_hostName =~ s/$hostName/$master_node/; 
 	system ("echo $master_hostName | sudo tee /var/lib/gridengine/default/common/act_qmaster");
