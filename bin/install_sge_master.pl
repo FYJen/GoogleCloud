@@ -4,6 +4,7 @@ use Data::Dumper;
 use strict;
 use warnings;
 
+
 #Global Variables:
 #===============================
 
@@ -27,11 +28,12 @@ my $ReserCores = $TotalCores - 1;
 # Number of arguements 
 my num_arg = $#ARGV;
 my @arg = ();
-# Read in arguments and put them into array
+# Read in arguments and put them into an array
 for (my $i = 0; $i < $num_arg; $i++) {
         my $input = shift;
         push(@arg, $input);
 }
+
 
 # Functions
 #======================================
@@ -125,7 +127,7 @@ sub generate_template {
 		system ("qconf -Ae $exe_file");
 	}
 
-# Configure Sub host and Exe host 	
+# Configure eubmission and execution hosts 	
 	foreach my $k (@arg) {
 	  # Add every compute node as a submission host
 		system ("qconf -as $k");
