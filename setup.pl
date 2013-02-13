@@ -10,7 +10,7 @@ my $MODE_INSTANCES_DELETE = 101;
 # instance specific 
 my $MODE_UPDATE_INSTANCE = 200;
 my $MODE_MOUNT_EPHEMERAL_DISK = 201;
-my $MODE_INSTALL_SGE = 203;
+my $MODE_INSTALL_SGE = 202;
 
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
@@ -34,6 +34,8 @@ my $configFile = $ARGV[0];
 my $mode = $ARGV[1];
 # Parse the config file
 my ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances) = parseConfigFile($configFile);
+# Get a local user
+my $local_user = $ENV{LOGNAME};
 
 # Print out the results after pasing the config file.
 # Also for debugging purpose 
@@ -60,7 +62,7 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	# Mount ephemeral disks
 	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_INSTALL_SGE) {
-	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $instanceCores);
+	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $instanceCores, $local_user);
 }
 
 
@@ -198,7 +200,8 @@ sub create_SGE {
 	my @instanceNames = @$array;
 	my $configFile = shift;
 	my $instanceNamePrefix = shift;
-	my $instanceCores = shift; 
+	my $instanceCores = shift;
+	my $local_user = shift; 
 
 	
 	my $num_instance = @instanceNames;
@@ -218,8 +221,9 @@ sub create_SGE {
 			my @cNode = @instanceNames;
 			# Join the elements from an array and return a scalar
 			my $node_list = join(" ", @cNode);
+			my $cores_node_list = $instanceCores." ".$local_user." ".$node_list;
 			
-			system ("gcutil ssh $k 'cat | perl /dev/stdin $instanceCores $node_list' < bin/install_sge_master.pl");
+			system ("gcutil ssh $k 'cat | perl /dev/stdin $cores_node_list' < bin/install_sge_master.pl");
 		} else {
 			# Collect compute nodes
 			$compute_nodes = $compute_nodes.$k." ";
