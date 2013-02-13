@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 
-use Data::Dumper;
 use strict;
 use warnings;
 
@@ -9,31 +8,32 @@ use warnings;
 #===============================
 
 # System envrionment variables
-my local_user = `users`;
-chomp($local_user);
-my host_name = `hostname`;
+my $host_name = `hostname`;
 chomp($host_name);
 
 # SGE tmp queue file name
-my queue_file = "new_queue";
+my $queue_file = "new_queue";
 # SGE queue's name
-my queue_name = "GC_main.q";
+my $queue_name = "GC_main.q";
 # SGE tmp exe_host file name
-my exe_file = "exe_host";
+my $exe_file = "exe_host";
 
 # Number of cores 
 my $TotalCores = shift;
 my $ReserCores = $TotalCores - 1;
 
+# Local user
+my $local_user = shift;
+chomp($local_user);
+
 # Number of arguements 
-my num_arg = $#ARGV;
+my $num_arg = $#ARGV + 1;
 my @arg = ();
 # Read in arguments and put them into an array
 for (my $i = 0; $i < $num_arg; $i++) {
         my $input = shift;
         push(@arg, $input);
 }
-
 
 # Functions
 #======================================
@@ -94,7 +94,7 @@ sub generate_template {
 	system ("sudo /usr/sbin/update-locale LANG=en_IN.UTF-8");
 	
 # Install Git
-	system ("sudo apt-get -y install git")
+	system ("sudo apt-get -y install git");
 
 # Install JAVA
 	system ("sudo apt-get -y install openjdk-6-jre");
@@ -103,20 +103,17 @@ sub generate_template {
 # Start SGE
 	system ("sudo /etc/init.d/gridengine-exec start");
 
-
 # Configure SGE 
 # Add local user to admin 
-	system ("sudo su");
-	system ("sudo -u sgeadmin qconf -am $local_user");
-	system ("exit");
+	system ("sudo qconf -am $local_user");
 	system ("qconf -au $local_user users");
 
 # Add a host group
-	system ("echo -e \"group_name @allhosts\nhostlist NONE\" > host_group");
+	system ("echo \"group_name \@allhosts\nhostlist NONE\" > host_group");
 	system ("qconf -Ahgrp host_group");
 
 # Add execution hosts
-	system ("qconf -se $host_name > $exe_file")
+	system ("qconf -se $host_name > $exe_file");
 	generate_template($exe_file);
 	#Use the template to add all the exec hosts.
 	foreach my $k (@arg) {
@@ -127,12 +124,12 @@ sub generate_template {
 		system ("qconf -Ae $exe_file");
 	}
 
-# Configure eubmission and execution hosts 	
+# Configure submission and execution hosts 	
 	foreach my $k (@arg) {
 	  # Add every compute node as a submission host
 		system ("qconf -as $k");
 	  # Add exec host to the @allhosts list
-		system ("qconf -aattr hostgroup hostlist $k @allhosts");
+		system ("qconf -aattr hostgroup hostlist $k \@allhosts");
 	} 
 
 # Create Queue
@@ -142,7 +139,7 @@ sub generate_template {
 	system ("qconf -Aq $queue_file");
 
 # Add host group to a queue
-	system ("qconf -aattr queue hostlist @allhosts $queue_name");
+	system ("qconf -aattr queue hostlist \@allhosts $queue_name");
 
 # Configure reserved cpu on master node
 	system ("qconf -aattr queue slots \"$TotalCores, [$host_name=$ReserCores]\" $queue_name");
