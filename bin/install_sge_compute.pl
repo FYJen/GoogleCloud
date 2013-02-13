@@ -20,7 +20,7 @@ sub install_sge_compute {
 	system ("sudo /usr/sbin/update-locale LANG=en_IN.UTF-8");
 	
 	# Install Git
-	system ("sudo apt-get -y install git")
+	system ("sudo apt-get -y install git");
 
 	# Install JAVA
 	system ("sudo apt-get -y install openjdk-6-jre");
