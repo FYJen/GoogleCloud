@@ -12,11 +12,11 @@ my $host_name = `hostname`;
 chomp($host_name);
 
 # SGE tmp queue file name
-my $queue_file = "new_queue";
+my $queue_file = "new_queue.txt";
 # SGE queue's name
 my $queue_name = "GC_main.q";
 # SGE tmp exe_host file name
-my $exe_file = "exe_host";
+my $exe_file = "exe_host.txt";
 
 # Number of cores 
 my $TotalCores = shift;
@@ -112,16 +112,20 @@ sub generate_template {
 	system ("echo \"group_name \@allhosts\nhostlist NONE\" > host_group");
 	system ("qconf -Ahgrp host_group");
 
+
 # Add execution hosts
-	system ("qconf -se $host_name > $exe_file");
+	system ("qconf -se $host_name >> $exe_file 2>>/dev/null");
 	generate_template($exe_file);
+	# Set initial $find_string variable
+	my $find_string = $host_name;
 	#Use the template to add all the exec hosts.
 	foreach my $k (@arg) {
 		# master_node is already an exec hosts so we don't need to add it
 		if ($k ne $host_name) {
-			edit_file($exe_file, $host_name, $k);
+			edit_file($exe_file, $find_string, $k);
+			system ("qconf -Ae $exe_file 2>> /dev/null");
+			$find_string = $k;
 		}
-		system ("qconf -Ae $exe_file");
 	}
 
 # Configure submission and execution hosts 	
@@ -143,8 +147,6 @@ sub generate_template {
 
 # Configure reserved cpu on master node
 	system ("qconf -aattr queue slots \"$TotalCores, [$host_name=$ReserCores]\" $queue_name");
-
-
 
 
 
