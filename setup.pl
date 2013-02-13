@@ -203,7 +203,15 @@ sub create_SGE {
 	my $instanceCores = shift;
 	my $local_user = shift; 
 
+	# Check the number of cores before attempting the installation.
+	# Number of cores need to be greater or equal to 2.
+	if ($instanceCores <= 1) {
+		print "\n\n\n====================================================\n";
+		print "\nThe instance type - \"$instanceType\" is not suitable for SGE (number of cores needs >= 2)...\n\n";
+		return ;
+	}
 	
+	# Check the number of instances.
 	my $num_instance = @instanceNames;
 	if ( $num_instance == 0) {
 		print "\n\n\n====================================================\n";
