@@ -10,6 +10,7 @@ my $MODE_INSTANCES_DELETE = 101;
 # instance specific 
 my $MODE_MOUNT_EPHEMERAL_DISK = 200;
 my $MODE_INSTALL_SGE = 201;
+my $MODE_ADD_AN_INSTANCE = 202;
 
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
@@ -23,6 +24,7 @@ if ($num_args != 2) {
 	#print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
 	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount ephemeral disk to individual server";
 	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
+	print "\n\t\t$MODE_ADD_AN_INSTANCE\tAdd an extra instance to SGE cluster. ";
 	print "\n\n";
 	exit (0);
 }
@@ -32,7 +34,7 @@ my $configFile = $ARGV[0];
 # Read the function code
 my $mode = $ARGV[1];
 # Parse the config file
-my ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances) = parseConfigFile($configFile);
+my ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes) = parseConfigFile($configFile);
 # Get a local user
 my $local_user = $ENV{LOGNAME};
 
@@ -62,8 +64,12 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_INSTALL_SGE) {
 	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $instanceCores, $local_user);
+} elsif ($mode == $MODE_ADD_AN_INSTANCE) {
+	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, 1);
+	@instanceNames = getInstanceNames();
+	update_SGE (\@instanceNames, "add", $local_user);
 } else {
-	print "\n\n\n====================================================\n";
+	print "\n\n====================================================\n";
 	print "\nInvalid MODE has been assigned ... \n\n";
 }
 
@@ -97,10 +103,14 @@ sub parseConfigFile {
 			$instanceNamePrefix = $line[1];	
 		} elsif($i =~ /^NUMBER_OF_INSTANCES:/) {
 			$numberOfInstances = $line[1];	
+		} elsif($i =~ /^MASTER_NODE:/) {
+			$master_node = $line[1];
+		} elsif($i =~ /^COMPUTE_NODES:/){
+			$compute_nodes = $line[1];
 		}
 	}
 	close FILE;
-	return ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances);
+	return ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes);
 }
 
 #
@@ -124,7 +134,8 @@ sub  read_counter {
 		open (FILE, ">$filename") || die "Cannot open file: $!\n";
         print FILE "1000";
         close FILE;
-        return 1000;
+        $counter = 1000;
+        return $counter;
     }
 }
 
@@ -147,14 +158,15 @@ sub createInstances {
 	open (FILE, ">.counter.txt") || die "Cannot open file: $!\n";
 	print FILE "$counter";
 	close FILE; 
-	print "\n\n\n====================================================\n";
+	print "\n\n====================================================\n";
 	print "\ncreating instances $machineNames ... \n\n";
 	system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
 }
 
 
 # 
-# delete instance
+# delete all instances based on the instance prefix 
+# defined in the input configuration file
 #
 sub deleteInstances {
 
@@ -173,7 +185,7 @@ sub deleteInstances {
 	foreach my $k (@instanceNames){
 		$instances = $instances . $k . " ";
 	}
-	print "\n\n\n====================================================\n";
+	print "\n\n====================================================\n";
 	if (length($instances) > 0) {
 		print "\ndeleting instances $instances ...\n\n";
 		system ("gcutil deleteinstance -f $instances 2>&1 | tee instances.deletion.log ");
@@ -238,7 +250,7 @@ sub create_SGE {
 	# Check the number of cores before attempting the installation.
 	# Number of cores need to be greater or equal to 2.
 	if ($instanceCores <= 1) {
-		print "\n\n\n====================================================\n";
+		print "\n\n====================================================\n";
 		print "\nThe instance type - \"$instanceType\" is not suitable for SGE (number of cores needs >= 2)...\n\n";
 		return ;
 	}
@@ -246,7 +258,7 @@ sub create_SGE {
 	# Check the number of instances.
 	my $num_instance = @instanceNames;
 	if ( $num_instance == 0) {
-		print "\n\n\n====================================================\n";
+		print "\n\n====================================================\n";
 		print "\nNo runing instances with prefix - \"$instanceNamePrefix\" exist to install SGE...\n\n";
 		return ;
 	}
@@ -273,15 +285,44 @@ sub create_SGE {
 
 	}
 
-	# Write master_node and compute_node to config.txtfile
-	open (FILE, ">>$configFile") or die "Could not find ${configFile}\n";
-	print FILE "\n\nmaster_node: $master_node\n";
-	print FILE "compute_nodes: $compute_nodes\n\n";
+	# Write master_node and compute_nodes to config.txtfile
+	open (FILE, ">>$configFile") or die "Could not find ${configFile}: $!\n";
+	print FILE "\nMASTER_NODE: $master_node\n";
+	print FILE "COMPUTE_NODES: $compute_nodes\n\n";
 	close(FILE);
 
 }
 
 
+#
+# Add an instance as a node 
+#
+sub update_SGE {
+
+	# List of my instanceNames
+	my $array = shift;
+	my @instanceNames = @$array;
+	# Process the instanceNames list 
+	my $master_node = $instanceNames[0]; # First element is master_node
+	my $index = $#instanceNames; # Get the index of the last element as it is the new added node
+	my $new_node = $instanceNames[$index];
+
+	# What action it is (add/delete)
+	my $action = shift;
+	# Local user
+	my $local_user = shift;
+
+	#Combine variables
+	my $arg = $local_user." ".$new_node;
+
+	if ($action eq "add") {
+		system ("gcutil ssh $master_node 'cat | perl /dev/stdin $arg' < bin/add_an_instance.pl");
+		system ("gcutil ssh $new_node 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
+	} else {
+
+	}
+	
+}
 
 
 
