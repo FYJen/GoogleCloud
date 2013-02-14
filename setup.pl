@@ -8,9 +8,8 @@ my $MODE_INSTANCES_CREATE = 100;
 my $MODE_INSTANCES_DELETE = 101;
 
 # instance specific 
-my $MODE_UPDATE_INSTANCE = 200;
-my $MODE_MOUNT_EPHEMERAL_DISK = 201;
-my $MODE_INSTALL_SGE = 202;
+my $MODE_MOUNT_EPHEMERAL_DISK = 200;
+my $MODE_INSTALL_SGE = 201;
 
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
@@ -20,7 +19,7 @@ if ($num_args != 2) {
 	print "\n\n\t[FILE]\t\tconfig file";
 	print "\n\t[INT]\t$MODE_INSTANCES_CREATE\tcreate instances based on the input configuration file";
 	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete instances based on the instance prefix defined in the input configuration file";
-	print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
+	#print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
 	#print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
 	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount ephemeral disk to individual server";
 	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
@@ -63,6 +62,9 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_INSTALL_SGE) {
 	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $instanceCores, $local_user);
+} else {
+	print "\n\n\n====================================================\n";
+	print "\nInvalid MODE has been assigned ... \n\n";
 }
 
 
