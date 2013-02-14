@@ -18,7 +18,7 @@ if ($num_args != 2) {
 	print "\n\nUsage: $0 [ FILE ] [ INT ] ";
 	print "\n\n\t[FILE]\t\tconfig file";
 	print "\n\t[INT]\t$MODE_INSTANCES_CREATE\tcreate instances based on the input configuration file";
-	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete instances based on the instance prefix defined in the input configuration file";
+	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete all instances based on the instance prefix defined in the input configuration file";
 	#print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
 	#print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
 	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount ephemeral disk to individual server";
@@ -103,6 +103,30 @@ sub parseConfigFile {
 	return ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances);
 }
 
+#
+# Read the counter 
+#
+sub  read_counter {
+	
+	my $filename = shift;
+	my $counter;
+
+	if (-e $filename) {
+		open FILE, $filename or die "Could not open ${filename}: $!\n";
+		my @line = <FILE>;
+		foreach my $i (@line) {
+			$counter = $i;
+		}
+		close FILE;
+		chomp($counter);
+		return $counter;
+	} else {
+		open (FILE, ">$filename") || die "Cannot open file: $!\n";
+        print FILE "1000";
+        close FILE;
+        return 1000;
+    }
+}
 
 #
 # create instances
@@ -110,7 +134,7 @@ sub parseConfigFile {
 sub createInstances {
 
 	# counter starting from 1000
-	my $counter = 1000;
+	my $counter = read_counter(".counter.txt");
 	my $machineName ;
 	my $machineNames = "";
 	my ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances) = @_;
@@ -119,6 +143,10 @@ sub createInstances {
 		$machineNames = $machineNames . $machineName . " ";
 		$counter++;
 	}
+	#update new  to file.
+	open (FILE, ">.counter.txt") || die "Cannot open file: $!\n";
+	print FILE "$counter";
+	close FILE; 
 	print "\n\n\n====================================================\n";
 	print "\ncreating instances $machineNames ... \n\n";
 	system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
@@ -150,6 +178,8 @@ sub deleteInstances {
 		print "\ndeleting instances $instances ...\n\n";
 		system ("gcutil deleteinstance -f $instances 2>&1 | tee instances.deletion.log ");
 	}
+	#remove counter file
+	unlink(".counter.txt");
 	print "\n\n";
 }
 
