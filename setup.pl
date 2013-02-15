@@ -305,7 +305,7 @@ sub update_SGE {
 	# Process the instanceNames list 
 	my $master_node = $instanceNames[0]; # First element is master_node
 	my $index = $#instanceNames; # Get the index of the last element as it is the new added node
-	my $new_node = $instanceNames[$index];
+	my $action_node = $instanceNames[$index];
 
 	# What action it is (add/delete)
 	my $action = shift;
@@ -313,12 +313,13 @@ sub update_SGE {
 	my $local_user = shift;
 
 	#Combine variables
-	my $arg = $local_user." ".$new_node;
+	my $arg = $local_user." ".$action_node;
 
 	if ($action eq "add") {
 		system ("gcutil ssh $master_node 'cat | perl /dev/stdin $arg' < bin/add_an_instance.pl");
-		system ("gcutil ssh $new_node 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
-	} else {
+		system ("gcutil ssh $action_node 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
+	} else { 
+		system ("gcutil deleteinstance -f $action_node 2>&1 | tee instances.deletion.log");
 
 	}
 	
