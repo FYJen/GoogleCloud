@@ -9,19 +9,17 @@ ZONE: us-central1-a
 AMI: ami_123
 
 # instance type 
-# INSTANCE_TYPE: n1-standard-4-d
-#INSTANCE_TYPE: n1-highcpu-4-d
-INSTANCE_TYPE: n1-standard-1-d
+INSTANCE_TYPE: n1-standard-2-d
 
 # instance cores
 #It is the last or seconde digit of your instance type. 
-INSTANCE_CORES: 1
+INSTANCE_CORES: 2
 
 # prefix of instance names 
 INSTANCE_NAME_PREFIX: ajenn
 
 # number of instances to be created 
-NUMBER_OF_INSTANCES: 2
+NUMBER_OF_INSTANCES: 5
 
 
 ################################################################
