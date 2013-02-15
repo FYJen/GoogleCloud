@@ -15,25 +15,17 @@ INSTANCE_TYPE: n1-standard-1-d
 
 # instance cores
 #It is the last or seconde digit of your instance type. 
-INSTANCE_CORES: 2
+INSTANCE_CORES: 1
 
 # prefix of instance names 
-INSTANCE_NAME_PREFIX: new
+INSTANCE_NAME_PREFIX: ajenn
 
 # number of instances to be created 
 NUMBER_OF_INSTANCES: 2
 
 
-######################################################################
-### Please make following modifications according to your needs. #####
-######################################################################
+################################################################
+### Please DON'T make changes to the following parameters  #####
+################################################################
 
-
-
-master_node: ajen1000
-compute_nodes: ajen1001 ajen1002 ajen1003 ajen1004 ajen1005 ajen1006 ajen1007 
-
-
-MASTER_NODE: new1000
-COMPUTE_NODES: new1001 new1002 
 
