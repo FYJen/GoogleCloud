@@ -144,18 +144,18 @@ sub  read_counter {
 #
 sub createInstances {
 
+	my ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances) = @_;
 	# counter starting from 1000
-	my $counter = read_counter(".counter.txt");
+	my $counter = read_counter(".$instanceNamePrefix.counter.txt");
 	my $machineName ;
 	my $machineNames = "";
-	my ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances) = @_;
 	for (my $n = 1; $n <= $numberOfInstances; $n++) {
 		$machineName = $instanceNamePrefix . $counter ;
 		$machineNames = $machineNames . $machineName . " ";
 		$counter++;
 	}
 	#update new  to file.
-	open (FILE, ">.counter.txt") || die "Cannot open file: $!\n";
+	open (FILE, ">.$instanceNamePrefix.counter.txt") || die "Cannot open file: $!\n";
 	print FILE "$counter";
 	close FILE; 
 	print "\n\n====================================================\n";
@@ -191,7 +191,7 @@ sub deleteInstances {
 		system ("gcutil deleteinstance -f $instances 2>&1 | tee instances.deletion.log ");
 	}
 	#remove counter file
-	unlink(".counter.txt");
+	unlink(".$instanceNamePrefix.counter.txt");
 	print "\n\n";
 }
 
