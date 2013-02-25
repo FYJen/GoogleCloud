@@ -8,7 +8,7 @@ my $MODE_INSTANCES_CREATE = 100;
 my $MODE_INSTANCES_DELETE = 101;
 
 # instance specific 
-my $MODE_MOUNT_EPHEMERAL_DISK = 200;
+my $MODE_MOUNT_EPHEMERAL_DISK = 102;
 my $MODE_INSTALL_SGE = 201;
 my $MODE_ADD_AN_INSTANCE = 202;
 
@@ -22,7 +22,8 @@ if ($num_args != 2) {
 	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete all instances based on the instance prefix defined in the input configuration file";
 	#print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
 	#print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
-	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount ephemeral disk to individual server";
+	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount every available ephemeral disk to individual servers";
+	print "\n";
 	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
 	print "\n\t\t$MODE_ADD_AN_INSTANCE\tAdd an extra instance to SGE cluster. ";
 	print "\n\n";
@@ -235,9 +236,38 @@ sub create_mount_ephemeral {
 }
 
 #
-# Purpose: Create SGE 
-# Parameters: @instanceNames, $configFile, $instanceNamePrefix, $instanceCores
+# Check if SGE is installed or not
+# check_sge: $master_node
 #
+sub check_sge {
+
+	my $master_node = shift;
+
+	my @output = `gcutil ssh $master_node 'ps aux | grep sge | cut --delimiter=" " --field=1 | head -2'`;
+	my $num_ele = @output;
+
+	if ($num_ele == 2) {
+		chomp($output[0]);
+		chomp($output[1]);
+		if ($output[0] eq "sgeadmin" && $output[1] eq "sgeadmin") {
+			return;
+		} else {
+			print "\nSGE is not installed and configured on master node - $master_node.\nPlese run the script with mode = 201\n";
+			print "Abort ... \n";
+			exit (2);
+		}
+	} else {
+		print "\nSGE is not installed and configured on master node - $master_node\nPlese run the script with mode = 201\n";
+		print "Abort ... \n";
+		exit (2);
+	}
+}
+
+
+#
+# Purpose: Create SGE 
+# Parameters: @instanceNames, $configFile, $instanceNamePrefix, $instanceCores $local_user
+# 
 sub create_SGE {
 	
 	my $array = shift;
@@ -247,12 +277,18 @@ sub create_SGE {
 	my $instanceCores = shift;
 	my $local_user = shift; 
 
+	# Assign master and compute nodes	
+	my $master_node = $instanceNames[0];
+	my $compute_nodes = "";
+	# Set number of compute nodes
+	my $num_of_compute_node = @instanceNames;
+
 	# Check the number of cores before attempting the installation.
 	# Number of cores need to be greater or equal to 2.
 	if ($instanceCores <= 1) {
 		print "\n\n====================================================\n";
 		print "\nThe instance type - \"$instanceType\" is not suitable for SGE (number of cores needs >= 2)...\n\n";
-		return ;
+		exit (2) ;
 	}
 	
 	# Check the number of instances.
@@ -260,12 +296,9 @@ sub create_SGE {
 	if ( $num_instance == 0) {
 		print "\n\n====================================================\n";
 		print "\nNo runing instances with prefix - \"$instanceNamePrefix\" exist to install SGE...\n\n";
-		return ;
+		exit (2) ;
 	}
 
-	# Assign master and compute nodes	
-	my $master_node = $instanceNames[0];
-	my $compute_nodes = "";
 
 	foreach my $k (@instanceNames) {
 		
@@ -276,11 +309,13 @@ sub create_SGE {
 			my $cores_node_list = $instanceCores." ".$local_user." ".$node_list;
 			
 			system ("gcutil ssh $k 'cat | perl /dev/stdin $cores_node_list' < bin/install_sge_master.pl");
-		} else {
+		} elsif ($num_of_compute_node != 1) {
 			# Collect compute nodes
 			$compute_nodes = $compute_nodes.$k." ";
 			# Pass hostname to the script from local to remote and execute the script
 			system ("gcutil ssh $k 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
+		} else {
+			return;
 		}
 
 	}
@@ -303,23 +338,26 @@ sub update_SGE {
 	my $array = shift;
 	my @instanceNames = @$array;
 	# Process the instanceNames list 
-	my $master_node = $instanceNames[0]; # First element is master_node
-	my $index = $#instanceNames; # Get the index of the last element as it is the new added node
-	my $action_node = $instanceNames[$index];
+	my $master_node = $instanceNames[0]; # We make first element as our master_node. 
+	my $index = $#instanceNames; # Get the index of the last element because it is the new added node
+	my $target_node = $instanceNames[$index];
 
 	# What action it is (add/delete)
 	my $action = shift;
 	# Local user
 	my $local_user = shift;
 
+	# Check for SGE installation
+	check_sge($master_node);
+
 	#Combine variables
-	my $arg = $local_user." ".$action_node;
+	my $arg = $local_user." ".$target_node;
 
 	if ($action eq "add") {
 		system ("gcutil ssh $master_node 'cat | perl /dev/stdin $arg' < bin/add_an_instance.pl");
-		system ("gcutil ssh $action_node 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
+		system ("gcutil ssh $target_node 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
 	} else { 
-		system ("gcutil deleteinstance -f $action_node 2>&1 | tee instances.deletion.log");
+		system ("gcutil deleteinstance -f $target_node 2>&1 | tee instances.deletion.log");
 
 	}
 	
