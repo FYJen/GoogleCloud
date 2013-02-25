@@ -25,7 +25,7 @@ sub install_sge_compute {
 	# Install JAVA
 	system ("sudo apt-get -y install openjdk-6-jre");
 	# Install Sun Grid Engin package
-	system ("sudo apt-get -y install gridengine-client gridengine-exec");
+	system ("sudo apt-get -y install gridengine-client gridengine-exec 2>>/dev/null");
 
 	#Add master node to SGE act_qmaster file
 	my $master_hostName = $hostNameFull;
