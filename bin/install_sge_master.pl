@@ -21,12 +21,6 @@ my $exe_file = "exe_host.txt";
 # Number of cores 
 my $TotalCores = shift;
 my $ReserCores = $TotalCores - 1;
-# Bounce if the number of cores is less or equal to 1
-if ($ReserCores <= 1) {
-	print "\n The Instance Type that you have chosen doesn't support SGE installation (number of cores <= 1) ... \n";
-	print "Abort ...\n";
-	exit (2); 
-}
 
 # Local user
 my $local_user = shift;
@@ -131,7 +125,7 @@ sub generate_template {
 			edit_file($exe_file, $find_string, $k);
 			system ("qconf -Ae $exe_file 2>> /dev/null");
 			$find_string = $k;
-		}
+		}	
 	}
 
 # Configure submission and execution hosts 	
@@ -153,6 +147,9 @@ sub generate_template {
 
 # Configure reserved cpu on master node
 	system ("qconf -aattr queue slots \"$TotalCores, [$host_name=$ReserCores]\" $queue_name");
+
+# Remove all the tmp files
+	system ("rm $exe_file $queue_file host_group")
 
 
 
