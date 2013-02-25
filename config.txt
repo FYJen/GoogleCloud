@@ -3,6 +3,7 @@
 ######################################################################
 #
 # zone where instances are to be created
+#ZONE: europe-west1-a
 ZONE: us-central1-a
 
 # machine images to be used 
@@ -16,10 +17,10 @@ INSTANCE_TYPE: n1-standard-2-d
 INSTANCE_CORES: 2
 
 # prefix of instance names 
-INSTANCE_NAME_PREFIX: ajenn
+INSTANCE_NAME_PREFIX: ajen
 
 # number of instances to be created 
-NUMBER_OF_INSTANCES: 5
+NUMBER_OF_INSTANCES: 1
 
 
 ################################################################
