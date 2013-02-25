@@ -26,7 +26,7 @@ if ($num_args != 2) {
 	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
 	print "\n\t\t$MODE_ADD_AN_INSTANCE\tAdd an extra instance to SGE cluster. ";
 	print "\n\n";
-	exit (0);
+	exit (2);
 }
 
 # Read the config file
