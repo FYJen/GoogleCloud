@@ -21,6 +21,12 @@ my $exe_file = "exe_host.txt";
 # Number of cores 
 my $TotalCores = shift;
 my $ReserCores = $TotalCores - 1;
+# Bounce if the number of cores is less or equal to 1
+if ($ReserCores <= 1) {
+	print "\n The Instance Type that you have chosen doesn't support SGE installation (number of cores <= 1) ... \n";
+	print "Abort ...\n";
+	exit (2); 
+}
 
 # Local user
 my $local_user = shift;
@@ -70,8 +76,8 @@ sub generate_template {
 	open my $in, '<', $file_name or die "Can't read old file: $!";
 	open my $out, '>', "$file_name.new" or die "Can't read new file: $!";
 	while( <$in> ) {
-    	next if /^(load_values|\s+)/;  # skip comment lines
-    	last if /^processors/;  # stop at end of line starting with "processors"
+    	next if /^(load_values|\s+)/;  # skip lines
+    	last if /^processors/;  # stop at a line starting with "processors"
     	print $out $_;
     }
     # print the rest of the lines	
