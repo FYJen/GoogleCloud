@@ -355,13 +355,13 @@ sub create_SGE {
 	}
 	$pm->wait_all_children;
 	
-
+=head
 	# Write master_node and compute_nodes to config.txtfile
 	open (FILE, ">>$configFile") or die "Could not find ${configFile}: $!\n";
 	print FILE "\nMASTER_NODE: $master_node\n";
 	print FILE "COMPUTE_NODES: $compute_nodes\n\n";
 	close(FILE);
-
+=cut
 }
 
 
