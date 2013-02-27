@@ -3,6 +3,7 @@
 use Data::Dumper;
 use strict;
 use warnings;
+use Parallel::ForkManager;
 
 my $MODE_INSTANCES_CREATE = 100;
 my $MODE_INSTANCES_DELETE = 101;
@@ -177,7 +178,6 @@ sub deleteInstances {
 
 	my $num_instance = @instanceNames;
 	if ( $num_instance == 0) {
-		print "\n\n\n====================================================\n";
 		print "\nNo runing instances with prefix - $instancePrefix exist ...\n\n";
 		return ;
 	}
@@ -193,6 +193,7 @@ sub deleteInstances {
 	}
 	#remove counter file
 	unlink(".$instanceNamePrefix.counter.txt");
+	unlink("GC_SGE.info");
 	print "\n\n";
 }
 
@@ -214,8 +215,9 @@ sub getInstanceNames {
 		}
 	}
 	foreach my $k (@iNames){
-		print "\nRunning instances '$k' \n";
+		print "Running instances '$k' \n\n";
 	}
+	print "====================================================\n\n";
 	return @iNames;
 }
 
@@ -265,8 +267,7 @@ sub check_sge {
 
 
 #
-# 
-#
+# Remote script execution wrapper
 #
 sub Paral_Execute {
 
@@ -275,10 +276,14 @@ sub Paral_Execute {
 	my $arg = shift;
 
 	if ($action eq "master") {
-		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl");
+		print "Installing SGE on master node - $target ... it may take a few minutes ... \n\n";
+		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl &> GC_SGE.info");
+		print "SGE Master node \($target\) Installation ... Done ...\n\n";
 	} else {
 		# Action = compute
-		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl");
+		print "Installing SGE on compute node - $target ... it may take a few minutes ... \n\n";
+		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl &> GC_SGE.info");
+		print "SGE Compute node \($target\)Installtion ... Done ...\n\n";
 	}
 }
 
@@ -301,7 +306,10 @@ sub create_SGE {
 	my $master_node = $instanceNames[0];
 	my $compute_nodes = "";
 	# Set number of compute nodes
-	my $num_of_compute_node = @instanceNames;
+	my $num_of_node = @instanceNames;
+
+	# Initiate FORK
+	my $pm = Parallel::ForkManager->new($num_of_node);
 
 	# Check the number of cores before attempting the installation.
 	# Number of cores need to be greater or equal to 2.
@@ -322,26 +330,30 @@ sub create_SGE {
 
 	foreach my $k (@instanceNames) {
 		
+		# Fork starts
+		$pm->start and next;
+
 		if ($k eq $master_node) {	
 			my @cNode = @instanceNames;
 			# Join the elements from an array and return a scalar
 			my $node_list = join(" ", @cNode);
 			my $cores_node_list = $instanceCores." ".$local_user." ".$node_list;
 			
-			#system ("gcutil ssh $k 'cat | perl /dev/stdin $cores_node_list' < bin/install_sge_master.pl");
 			Paral_Execute("master", $k, $cores_node_list);
 
-		} elsif ($num_of_compute_node != 1) {
+		} elsif ($num_of_node != 1) {
 			# Collect compute nodes
 			$compute_nodes = $compute_nodes.$k." ";
-			# Pass hostname to the script from local to remote and execute the script
-			#system ("gcutil ssh $k 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
 			Paral_Execute("compute", $k, $master_node);
 		} else {
 			return;
 		}
+		
+		# Fork finishes 
+		$pm->finish;
 
 	}
+	$pm->wait_all_children;
 	
 
 	# Write master_node and compute_nodes to config.txtfile
