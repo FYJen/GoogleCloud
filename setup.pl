@@ -265,6 +265,26 @@ sub check_sge {
 
 
 #
+# 
+#
+#
+sub Paral_Execute {
+
+	my $action = shift;
+	my $target = shift;
+	my $arg = shift;
+
+	if ($action eq "master") {
+		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl");
+	} else {
+		# Action = compute
+		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl");
+	}
+}
+
+
+
+#
 # Purpose: Create SGE 
 # Parameters: @instanceNames, $configFile, $instanceNamePrefix, $instanceCores $local_user
 # 
@@ -308,17 +328,21 @@ sub create_SGE {
 			my $node_list = join(" ", @cNode);
 			my $cores_node_list = $instanceCores." ".$local_user." ".$node_list;
 			
-			system ("gcutil ssh $k 'cat | perl /dev/stdin $cores_node_list' < bin/install_sge_master.pl");
+			#system ("gcutil ssh $k 'cat | perl /dev/stdin $cores_node_list' < bin/install_sge_master.pl");
+			Paral_Execute("master", $k, $cores_node_list);
+
 		} elsif ($num_of_compute_node != 1) {
 			# Collect compute nodes
 			$compute_nodes = $compute_nodes.$k." ";
 			# Pass hostname to the script from local to remote and execute the script
-			system ("gcutil ssh $k 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
+			#system ("gcutil ssh $k 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
+			Paral_Execute("compute", $k, $master_node);
 		} else {
 			return;
 		}
 
 	}
+	
 
 	# Write master_node and compute_nodes to config.txtfile
 	open (FILE, ">>$configFile") or die "Could not find ${configFile}: $!\n";
