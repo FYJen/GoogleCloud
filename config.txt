@@ -20,19 +20,9 @@ INSTANCE_CORES: 2
 INSTANCE_NAME_PREFIX: ajen
 
 # number of instances to be created 
-NUMBER_OF_INSTANCES: 2
+NUMBER_OF_INSTANCES: 4
 
 
 ################################################################
 ### Please DON'T make changes to the following parameters  #####
 ################################################################
-
-
-
-MASTER_NODE: ajen1000
-COMPUTE_NODES: ajen1001 
-
-
-MASTER_NODE: ajen1000
-COMPUTE_NODES: ajen1001 ajen1002 ajen1003 
-
