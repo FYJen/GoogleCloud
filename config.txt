@@ -17,10 +17,10 @@ INSTANCE_TYPE: n1-standard-2
 INSTANCE_CORES: 2
 
 # prefix of instance names 
-INSTANCE_NAME_PREFIX: ajen
+INSTANCE_NAME_PREFIX: sge
 
 # number of instances to be created 
-NUMBER_OF_INSTANCES: 2
+NUMBER_OF_INSTANCES: 9
 
 
 ################################################################
