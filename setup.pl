@@ -155,14 +155,15 @@ sub createInstances {
 		$machineName = $instanceNamePrefix . $counter ;
 		$machineNames = $machineNames . $machineName . " ";
 		$counter++;
-	}
-	#update new  to file.
-	open (FILE, ">.$instanceNamePrefix.counter.txt") || die "Cannot open file: $!\n";
-	print FILE "$counter";
-	close FILE; 
+	} 
 	print "\n\n====================================================\n";
 	print "\ncreating instances $machineNames ... \n\n";
 	system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
+
+	#update new  to file.
+	open (FILE, ">.$instanceNamePrefix.counter.txt") || die "Cannot open file: $!\n";
+	print FILE "$counter";
+	close FILE;
 }
 
 
