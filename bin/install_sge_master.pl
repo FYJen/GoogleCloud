@@ -105,7 +105,8 @@ sub generate_template {
 
 # Configure SGE 
 # Add local user to admin 
-	system ("sudo -u sgeadmin qconf -am $local_user");
+	#system ("sudo -u sgeadmin qconf -am $local_user");
+	system ("sudo qconf -am $local_user");
 	system ("qconf -au $local_user users");
 
 # Add a host group

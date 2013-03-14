@@ -206,7 +206,7 @@ sub deleteInstances {
 	}
 	#remove counter file
 	unlink(".$instanceNamePrefix.counter.txt");
-	unlink("GC_SGE.info");
+	unlink("*.GC_SGE.info");
 	print "\n\n";
 }
 
@@ -290,12 +290,12 @@ sub installingSGE {
 
 	if ($action eq "master") {
 		print "Installing SGE on master node - $target ... it may take a few minutes ... \n\n";
-		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl &> GC_SGE.info");
+		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl &> $target.GC_SGE.info");
 		print "SGE Master node \($target\) installation ... done ...\n\n";
 	} else {
 		# Action = compute
 		print "Installing SGE on compute node - $target ... it may take a few minutes ... \n\n";
-		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl &> GC_SGE.info");
+		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl &> $target.GC_SGE.info");
 		print "SGE Compute node \($target\) installation ... done ...\n\n";
 	}
 }
