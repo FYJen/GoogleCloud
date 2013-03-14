@@ -13,34 +13,27 @@ my $MODE_MOUNT_EPHEMERAL_DISK = 102;
 my $MODE_INSTALL_SGE = 201;
 my $MODE_ADD_AN_INSTANCE = 202;
 
+
+# we need at least 2 arguments 
 my $num_args = $#ARGV + 1;
 if ($num_args != 2) {
-	print "\n";
-	print "\nThis script creates and deletes Google Cloud instances";
-	print "\n\nUsage: $0 [ FILE ] [ INT ] ";
-	print "\n\n\t[FILE]\t\tconfig file";
-	print "\n\t[INT]\t$MODE_INSTANCES_CREATE\tcreate instances based on the input configuration file";
-	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete all instances based on the instance prefix defined in the input configuration file";
-	#print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
-	#print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
-	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount every available ephemeral disk to individual servers";
-	print "\n";
-	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
-	print "\n\t\t$MODE_ADD_AN_INSTANCE\tAdd an extra instance to SGE cluster. ";
-	print "\n\n";
-	exit (2);
+	usage();
+	exit(1);
 }
 
 # Read the config file
 my $configFile = $ARGV[0];
+
 # Read the function code
 my $mode = $ARGV[1];
+
 # Parse the config file
 my ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes) = parseConfigFile($configFile);
+
 # Get a local user
 my $local_user = $ENV{LOGNAME};
 
-# Print out the results after pasing the config file.
+# Print out the attributes after pasing the config file.
 # Also for debugging purpose 
 print "\n\n";
 print "\nzone $zone";
@@ -51,10 +44,12 @@ print "\ninstanceNamePrefix $instanceNamePrefix";
 print "\nnumberOfInstances $numberOfInstances";
 print "\n\n";
 
-# Get all the running instance
+
+# Get all the running instances 
 my @instanceNames = getInstanceNames();
 
-# Preform different functions accodring to function codes
+
+# Perform different functions according to function mode
 if ($mode == $MODE_INSTANCES_DELETE) {
 	# Delete instance
 	deleteInstances(\@instanceNames, $instanceNamePrefix);
@@ -73,6 +68,23 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 } else {
 	print "\n\n====================================================\n";
 	print "\nInvalid MODE has been assigned ... \n\n";
+}
+
+sub usage {
+	print "\n";
+	print "\nThis script setup Google Cloud instances and Sun Grid Engine (SGE)";
+	print "\n\nUsage: $0 [ FILE ] [ INT ] ";
+	print "\n\n\t[FILE]\t\tconfig file";
+	print "\n\t[INT]\t$MODE_INSTANCES_CREATE\tcreate instances based on the input configuration file";
+	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete all instances based on the instance prefix defined in the input configuration file";
+	#print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
+	#print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
+	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount every available ephemeral disk to individual servers";
+	print "\n";
+	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
+	print "\n\t\t$MODE_ADD_AN_INSTANCE\tAdd an extra instance to SGE cluster. ";
+	print "\n\n";
+	exit (2);
 }
 
 
@@ -99,8 +111,8 @@ sub parseConfigFile {
 			$ami = $line[1];	
 		} elsif($i =~ /^INSTANCE_TYPE:/) {
 			$instanceType = $line[1];	
-		} elsif($i =~ /^INSTANCE_CORES:/){
-			$instanceCores = $line[1];
+			my @fields = split ("-", $instanceType);
+			$instanceCores = $fields[2]; 
 		} elsif($i =~ /^INSTANCE_NAME_PREFIX:/) {
 			$instanceNamePrefix = $line[1];	
 		} elsif($i =~ /^NUMBER_OF_INSTANCES:/) {
@@ -268,9 +280,9 @@ sub check_sge {
 
 
 #
-# Remote script execution wrapper
+# Remotely installing SGE 
 #
-sub Paral_Execute {
+sub installingSGE {
 
 	my $action = shift;
 	my $target = shift;
@@ -279,12 +291,12 @@ sub Paral_Execute {
 	if ($action eq "master") {
 		print "Installing SGE on master node - $target ... it may take a few minutes ... \n\n";
 		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl &> GC_SGE.info");
-		print "SGE Master node \($target\) Installation ... Done ...\n\n";
+		print "SGE Master node \($target\) installation ... done ...\n\n";
 	} else {
 		# Action = compute
 		print "Installing SGE on compute node - $target ... it may take a few minutes ... \n\n";
 		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl &> GC_SGE.info");
-		print "SGE Compute node \($target\)Installtion ... Done ...\n\n";
+		print "SGE Compute node \($target\) installation ... done ...\n\n";
 	}
 }
 
@@ -340,12 +352,12 @@ sub create_SGE {
 			my $node_list = join(" ", @cNode);
 			my $cores_node_list = $instanceCores." ".$local_user." ".$node_list;
 			
-			Paral_Execute("master", $k, $cores_node_list);
+			installingSGE("master", $k, $cores_node_list);
 
 		} elsif ($num_of_node != 1) {
 			# Collect compute nodes
 			$compute_nodes = $compute_nodes.$k." ";
-			Paral_Execute("compute", $k, $master_node);
+			installingSGE("compute", $k, $master_node);
 		} else {
 			return;
 		}

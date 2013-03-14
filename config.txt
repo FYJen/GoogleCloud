@@ -1,8 +1,9 @@
 ######################################################################
-### Please make following modifications according to your needs. #####
+### Please make following modifications according to your needs.   ###
 ######################################################################
 #
 # zone where instances are to be created
+# see https://developers.google.com/compute/docs/zones
 #ZONE: europe-west1-a
 ZONE: us-central1-a
 
@@ -10,20 +11,17 @@ ZONE: us-central1-a
 AMI: ami_123
 
 # instance type 
+# see https://developers.google.com/compute/docs/instances
+# INSTANCE_TYPE: n1-standard-1-d
 INSTANCE_TYPE: n1-standard-2
-
-# instance cores
-#It is the last or seconde digit of your instance type. 
-INSTANCE_CORES: 2
 
 # prefix of instance names 
 INSTANCE_NAME_PREFIX: sge
 
 # number of instances to be created 
-NUMBER_OF_INSTANCES: 9
+NUMBER_OF_INSTANCES: 2
 
-
-################################################################
-### Please DON'T make changes to the following parameters  #####
-################################################################
+######################################################################
+### Please DON'T make changes to the following parameters         ####
+######################################################################
 
