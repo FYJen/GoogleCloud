@@ -28,7 +28,7 @@ my $configFile = $ARGV[0];
 my $mode = $ARGV[1];
 
 # Parse the config file
-my ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes) = parseConfigFile($configFile);
+my ($zone, $ami, $instanceType, $numberOfCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes) = parseConfigFile($configFile);
 
 # Get a local user
 my $local_user = $ENV{LOGNAME};
@@ -39,7 +39,7 @@ print "\n\n";
 print "\nzone $zone";
 print "\nami $ami";
 print "\ninstanceType $instanceType";
-print "\ninstanceCores $instanceCores";
+print "\nnumberOfCores $instanceCores";
 print "\ninstanceNamePrefix $instanceNamePrefix";
 print "\nnumberOfInstances $numberOfInstances";
 print "\n\n";
@@ -60,7 +60,7 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	# Mount ephemeral disks
 	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix);
 } elsif ($mode == $MODE_INSTALL_SGE) {
-	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $instanceCores, $local_user);
+	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $numberOfCores, $local_user);
 } elsif ($mode == $MODE_ADD_AN_INSTANCE) {
 	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, 1);
 	@instanceNames = getInstanceNames();
@@ -112,7 +112,7 @@ sub parseConfigFile {
 		} elsif($i =~ /^INSTANCE_TYPE:/) {
 			$instanceType = $line[1];	
 			my @fields = split ("-", $instanceType);
-			$instanceCores = $fields[2]; 
+			$numberOfCores = $fields[2]; 
 		} elsif($i =~ /^INSTANCE_NAME_PREFIX:/) {
 			$instanceNamePrefix = $line[1];	
 		} elsif($i =~ /^NUMBER_OF_INSTANCES:/) {
@@ -124,7 +124,7 @@ sub parseConfigFile {
 		}
 	}
 	close FILE;
-	return ($zone, $ami, $instanceType, $instanceCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes);
+	return ($zone, $ami, $instanceType, $numberOfCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes);
 }
 
 #
@@ -304,7 +304,7 @@ sub installingSGE {
 
 #
 # Purpose: Create SGE 
-# Parameters: @instanceNames, $configFile, $instanceNamePrefix, $instanceCores $local_user
+# Parameters: @instanceNames, $configFile, $instanceNamePrefix, $numberOfCores $local_user
 # 
 sub create_SGE {
 	
@@ -312,7 +312,7 @@ sub create_SGE {
 	my @instanceNames = @$array;
 	my $configFile = shift;
 	my $instanceNamePrefix = shift;
-	my $instanceCores = shift;
+	my $numberOfCores = shift;
 	my $local_user = shift; 
 
 	# Assign master and compute nodes	
@@ -326,7 +326,7 @@ sub create_SGE {
 
 	# Check the number of cores before attempting the installation.
 	# Number of cores need to be greater or equal to 2.
-	if ($instanceCores <= 1) {
+	if ($numberOfCores <= 1) {
 		print "\n\n====================================================\n";
 		print "\nThe instance type - \"$instanceType\" is not suitable for SGE (number of cores needs >= 2)...\n\n";
 		exit (2) ;
@@ -350,7 +350,7 @@ sub create_SGE {
 			my @cNode = @instanceNames;
 			# Join the elements from an array and return a scalar
 			my $node_list = join(" ", @cNode);
-			my $cores_node_list = $instanceCores." ".$local_user." ".$node_list;
+			my $cores_node_list = $numberOfCores." ".$local_user." ".$node_list;
 			
 			installingSGE("master", $k, $cores_node_list);
 
