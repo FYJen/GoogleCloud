@@ -2,7 +2,7 @@
 ### Please make following modifications according to your needs.   ###
 ######################################################################
 #
-# zone where instances are to be created
+# zone where instances to be created
 # see https://developers.google.com/compute/docs/zones
 #ZONE: europe-west1-a
 ZONE: us-central1-a
@@ -15,7 +15,7 @@ AMI: ami_123
 # INSTANCE_TYPE: n1-standard-1-d
 INSTANCE_TYPE: n1-standard-2
 
-# prefix of instance names 
+# prefix of instance names or host names 
 INSTANCE_NAME_PREFIX: sge
 
 # number of instances to be created 
