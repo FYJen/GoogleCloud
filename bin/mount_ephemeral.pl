@@ -17,7 +17,7 @@ sub mount_ephemeral_disk {
 		#trim traling newline characters
 		$DiskList[$i] =~ s/\n+$//;
 
-		$path = "/mnt/scratch";
+		#$path = "/mnt/scratch";
 		my $p = "$path$i";
 		system("sudo mkdir -p $p");
 		system("sudo chmod a+w $p");
