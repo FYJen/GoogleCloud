@@ -3,6 +3,8 @@
 use strict;
 use warnings;
 
+my $path = $ARGV[0];
+
 
 sub mount_ephemeral_disk {
 
@@ -15,9 +17,11 @@ sub mount_ephemeral_disk {
 		#trim traling newline characters
 		$DiskList[$i] =~ s/\n+$//;
 
-		system("sudo mkdir -p /mnt/scratch$i");
-		system("sudo chmod a+w /mnt/scratch$i");
-		system("sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" $DiskList[$i] /mnt/scratch$i");
+		$path = "/mnt/scratch";
+		my $p = "$path$i";
+		system("sudo mkdir -p $p");
+		system("sudo chmod a+w $p");
+		system("sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" $DiskList[$i] $p");
 	}
 }
 

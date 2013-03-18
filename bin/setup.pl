@@ -14,75 +14,87 @@ my $MODE_INSTALL_SGE = 201;
 my $MODE_ADD_AN_INSTANCE = 202;
 
 
+my $SGE_INSTALLATION_POSTFIX = "GoogleCloud.SGE.installation.log";
+
 # we need at least 2 arguments 
 my $num_args = $#ARGV + 1;
-if ($num_args != 2) {
+if ($num_args < 2) {
 	usage();
 	exit(1);
 }
 
-# Read the config file
+# Config file
 my $configFile = $ARGV[0];
 
-# Read the function code
+# Mode 
 my $mode = $ARGV[1];
 
-# Parse the config file
+# parse the config file
 my ($zone, $ami, $instanceType, $numberOfCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes) = parseConfigFile($configFile);
 
 # Get a local user
 my $local_user = $ENV{LOGNAME};
 
 # Print out the attributes after pasing the config file.
-# Also for debugging purpose 
+# For debugging purpose 
 print "\n\n";
-print "\nzone $zone";
-print "\nami $ami";
-print "\ninstanceType $instanceType";
-print "\nnumberOfCores $numberOfCores";
-print "\ninstanceNamePrefix $instanceNamePrefix";
-print "\nnumberOfInstances $numberOfInstances";
+print "\nZONE:\t\t\t$zone";
+print "\nAMI\t\t\t$ami";
+print "\nINSTANCE TYPE\t\t$instanceType ( $numberOfCores core(s) )";
+print "\nINSTANCE NAME PREFIX\t$instanceNamePrefix";
+print "\nNUMBER OF INSTANCES\t$numberOfInstances";
 print "\n\n";
 
 
 # Get all the running instances 
-my @instanceNames = getInstanceNames();
-
-
+my @instanceNames = getInstanceNames($zone);
+	
 # Perform different functions according to function mode
 if ($mode == $MODE_INSTANCES_DELETE) {
 	# Delete instance
-	deleteInstances(\@instanceNames, $instanceNamePrefix);
+	deleteInstances(\@instanceNames, $instanceNamePrefix, $zone);
 } elsif ($mode == $MODE_INSTANCES_CREATE) {
 	# Create instance
 	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
 } elsif ($mode == $MODE_MOUNT_EPHEMERAL_DISK) {
 	# Mount ephemeral disks
-	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix);
+	if ($num_args != 3) {
+		print "\n\nplease include path prefix to mount emepheral devices...\n";
+		usage();
+		exit (0);
+	} 
+	my $path = $ARGV[2];
+	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix, $zone, $path, $numberOfInstances );
 } elsif ($mode == $MODE_INSTALL_SGE) {
 	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $numberOfCores, $local_user);
 } elsif ($mode == $MODE_ADD_AN_INSTANCE) {
 	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, 1);
-	@instanceNames = getInstanceNames();
+	@instanceNames = getInstanceNames($zone);
 	update_SGE (\@instanceNames, "add", $local_user);
 } else {
 	print "\n\n====================================================\n";
-	print "\nInvalid MODE has been assigned ... \n\n";
+	print "\n\nInvalid input MODE!!!! Please see usage below\n";
+	usage();
 }
 
+
+#
+# usage 
+#
 sub usage {
 	print "\n";
 	print "\nThis script setup Google Cloud instances and Sun Grid Engine (SGE)";
-	print "\n\nUsage: $0 [ FILE ] [ INT ] ";
+	print "\n\nUsage: $0 [ FILE ] [ MODE ] ";
 	print "\n\n\t[FILE]\t\tconfig file";
-	print "\n\t[INT]\t$MODE_INSTANCES_CREATE\tcreate instances based on the input configuration file";
+	print "\n\t[MODE]\t$MODE_INSTANCES_CREATE\tcreate instances based on the input configuration file";
 	print "\n\t\t$MODE_INSTANCES_DELETE\tdelete all instances based on the instance prefix defined in the input configuration file";
 	#print "\n\t\t$MODE_UPDATE_INSTANCE\tupdate packages on instance ";
 	#print "\n\t\t$MODE_UPDATE_ETC_HOSTS\tupdate /etc/host file on an instance for SGE installation";
-	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tMount every available ephemeral disk to individual servers";
+	print "\n\t\t$MODE_MOUNT_EPHEMERAL_DISK\tmount available ephemeral disk to individual instances";
+	print "\n\t\t\t[PATH]\tpath prefix to mount ephemeral disk(s) to";
 	print "\n";
-	print "\n\t\t$MODE_INSTALL_SGE\tInstall Sung Grid Engine (SGE) to the instances created. ";
-	print "\n\t\t$MODE_ADD_AN_INSTANCE\tAdd an extra instance to SGE cluster. ";
+	print "\n\t\t$MODE_INSTALL_SGE\tinstall Sun Grid Engine (SGE) on the instances created. ";
+	print "\n\t\t$MODE_ADD_AN_INSTANCE\tadd additional instances to the SGE cluster. ";
 	print "\n\n";
 	exit (2);
 }
@@ -127,6 +139,7 @@ sub parseConfigFile {
 	return ($zone, $ami, $instanceType, $numberOfCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes);
 }
 
+
 #
 # Read the counter 
 #
@@ -146,12 +159,13 @@ sub  read_counter {
 		return $counter;
 	} else {
 		open (FILE, ">$filename") || die "Cannot open file: $!\n";
-        print FILE "1000";
-        close FILE;
-        $counter = 1000;
-        return $counter;
-    }
+		$counter = 1000;
+		print FILE "$counter";
+		close FILE;
+		return $counter;
+	}
 }
+
 
 #
 # create instances
@@ -159,6 +173,7 @@ sub  read_counter {
 sub createInstances {
 
 	my ($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances) = @_;
+
 	# counter starting from 1000
 	my $counter = read_counter(".$instanceNamePrefix.counter.txt");
 	my $machineName ;
@@ -171,12 +186,12 @@ sub createInstances {
 	print "\n\n====================================================\n";
 	print "\ncreating instances $machineNames ... \n\n";
 	if (length($ami)==0) {
-		system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
+		system ("gcutil addinstance $machineNames --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee  $instanceNamePrefix.instances.creation.log ");
 	} else {
-		system ("gcutil addinstance $machineNames --image=$ami --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee instances.creation.log ");
+		system ("gcutil addinstance $machineNames --image=$ami --wait_until_running --machine_type=$instanceType --zone=$zone 2>&1 | tee $instanceNamePrefix.instances.creation.log ");
 	}
 
-	#update new  to file.
+	#update new counter to file.
 	open (FILE, ">.$instanceNamePrefix.counter.txt") || die "Cannot open file: $!\n";
 	print FILE "$counter";
 	close FILE;
@@ -192,10 +207,11 @@ sub deleteInstances {
 	my $array = shift;
 	my @instanceNames = @$array;
 	my $instancePrefix = shift;
+	my $zone = shift;
 
 	my $num_instance = @instanceNames;
 	if ( $num_instance == 0) {
-		print "\nNo runing instances with prefix - $instancePrefix exist ...\n\n";
+		print "\n\nNo running instances with prefix - $instancePrefix exist ...\n\n";
 		return ;
 	}
 
@@ -206,11 +222,12 @@ sub deleteInstances {
 	print "\n\n====================================================\n";
 	if (length($instances) > 0) {
 		print "\ndeleting instances $instances ...\n\n";
-		system ("gcutil deleteinstance -f $instances 2>&1 | tee instances.deletion.log ");
+		system ("gcutil deleteinstance --zone=$zone -f $instances 2>&1 | tee  $instanceNamePrefix.instances.deletion.log ");
+		print "\n\ndone deleting instances $instances\n\n";
 	}
 	#remove counter file
 	unlink(".$instanceNamePrefix.counter.txt");
-	unlink("*.GC_SGE.info");
+	unlink("*.$SGE_INSTALLATION_POSTFIX");
 	print "\n\n";
 }
 
@@ -220,9 +237,12 @@ sub deleteInstances {
 #
 sub getInstanceNames {
 
+	my $zone = shift;
+
 	my @iNames = ();
 	# query to get list of running of instances 
-	my @names = `gcutil listinstances | grep project | awk '{ print \$2 }'`;
+	# my @names = `gcutil listinstances --zone=$zone | grep project | awk '{ print \$2 }'`;
+	my @names = `gcutil listinstances --zone=$zone | grep network | awk '{ print \$2 }'`;
 	foreach my $n (@names) {
 		# trim whitespaces 
 		$n =~ s/^\s+//;
@@ -231,10 +251,12 @@ sub getInstanceNames {
 			push(@iNames, $n);
 		}
 	}
-	foreach my $k (@iNames){
-		print "Running instances '$k' \n\n";
+	if (scalar(@iNames) > 0) {
+		print "====================================================\n\n";
+		foreach my $k (@iNames){
+			print "Running instances '$k' \n\n";
+		}
 	}
-	print "====================================================\n\n";
 	return @iNames;
 }
 
@@ -246,11 +268,19 @@ sub create_mount_ephemeral {
 	my $array = shift;
 	my @instanceNames = @$array;
 	my $instancePrefix = shift;
+	my $zone = shift;
+	my $path = shift;
+	my $num_of_nodes = shift;
+	
+	my $pm = Parallel::ForkManager->new($num_of_nodes);
 
 	foreach my $k (@instanceNames) {
-		system ("gcutil ssh $k perl < bin/mount_ephemeral.pl");	
+		$pm->start and next;
+		system ("gcutil ssh $k perl < bin/mount_ephemeral.pl ");	
+		$pm->finish;
 	}
-	print "\n\nDone ...\n\n";
+	$pm->wait_all_children();
+	print "\n\ndone ...\n\n";
 
 }
 
@@ -293,14 +323,14 @@ sub installingSGE {
 	my $arg = shift;
 
 	if ($action eq "master") {
-		print "Installing SGE on master node - $target ... it may take a few minutes ... \n\n";
-		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl &> $target.GC_SGE.info");
-		print "SGE Master node \($target\) installation ... done ...\n\n";
+		print "Installing SGE on master node -  $target ... it may take a few minutes ... \n\n";
+		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl &> $target.$SGE_INSTALLATION_POSTFIX");
+		print "SGE master node  \($target\) installation ... done ...\n\n";
 	} else {
 		# Action = compute
 		print "Installing SGE on compute node - $target ... it may take a few minutes ... \n\n";
-		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl &> $target.GC_SGE.info");
-		print "SGE Compute node \($target\) installation ... done ...\n\n";
+		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl &> $target.$SGE_INSTALLATION_POSTFIX");
+		print "SGE compute node \($target\) installation ... done ...\n\n";
 	}
 }
 
@@ -324,6 +354,7 @@ sub create_SGE {
 	my $compute_nodes = "";
 	# Set number of compute nodes
 	my $num_of_node = @instanceNames;
+
 
 	# Initiate FORK
 	my $pm = Parallel::ForkManager->new($num_of_node);
