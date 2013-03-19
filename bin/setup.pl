@@ -128,7 +128,7 @@ sub Check_Resources {
 	$diff = $overall_resource - $current_resource;
 
 	if ($property =~ /instance/) {
-		if ($diff > $required_resource) {
+		if ($diff >= $required_resource) {
 			return 1;
 		} else {
 			print "\nPROBLEM [POSSIBLE QUOTA_EXCEED]:";
@@ -136,7 +136,7 @@ sub Check_Resources {
 			print "\n\tYou are asking a total of $required_resource instances, where only $diff is available\n\n";
 		}
 	} elsif ($property =~ /cpu/) {
-		if ($diff > $required_resource) {
+		if ($diff >= $required_resource) {
 			return 1;
 		} else {
 			print "\nPROBLEM [POSSIBLE QUOTA_EXCEED]:";
