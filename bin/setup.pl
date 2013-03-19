@@ -6,6 +6,7 @@ use warnings;
 use Parallel::ForkManager;
 
 my $MODE_INSTANCES_CREATE = 100;
+
 my $MODE_INSTANCES_DELETE = 101;
 
 # instance specific 
@@ -40,9 +41,9 @@ my $local_user = $ENV{LOGNAME};
 print "\n\n";
 print "\nZONE:\t\t\t$zone";
 print "\nAMI\t\t\t$ami";
-print "\nINSTANCE TYPE\t\t$instanceType ( $numberOfCores core(s) )";
 print "\nINSTANCE NAME PREFIX\t$instanceNamePrefix";
-print "\nNUMBER OF INSTANCES\t$numberOfInstances";
+print "\nINSTANCE TYPE\t\t$instanceType ( $numberOfCores core(s) )";
+print "\nNUMBER OF INSTANCES\t$numberOfInstances ( total number of cores " . $numberOfInstances * $numberOfCores . " )";
 print "\n\n";
 
 
@@ -276,10 +277,12 @@ sub create_mount_ephemeral {
 
 	foreach my $k (@instanceNames) {
 		$pm->start and next;
-		system ("gcutil ssh $k perl < bin/mount_ephemeral.pl ");	
+		system ("gcutil ssh $k 'cat | perl /dev/stdin $path' < bin/mount_ephemeral.pl ");	
 		$pm->finish;
 	}
+
 	$pm->wait_all_children();
+
 	print "\n\ndone ...\n\n";
 
 }
