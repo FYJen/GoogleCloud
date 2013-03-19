@@ -1,4 +1,5 @@
 .DS_Store
 tools/gcutil/gcutil-1.5.0
-
+*.counter.txt
 *.ajen
+*.log
