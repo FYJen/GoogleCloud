@@ -42,8 +42,8 @@ print "\n\n";
 print "\nZONE:\t\t\t$zone";
 print "\nAMI\t\t\t$ami";
 print "\nINSTANCE NAME PREFIX\t$instanceNamePrefix";
-print "\nINSTANCE TYPE\t\t$instanceType ( $numberOfCores core(s) )";
-print "\nNUMBER OF INSTANCES\t$numberOfInstances ( total number of cores " . $numberOfInstances * $numberOfCores . " )";
+print "\nINSTANCE TYPE\t\t$instanceType [ $numberOfCores core(s) ]";
+print "\nNUMBER OF INSTANCES\t$numberOfInstances [ total number of cores " . $numberOfInstances * $numberOfCores . " ]";
 print "\n\n";
 
 
