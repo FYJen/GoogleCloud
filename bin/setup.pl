@@ -38,7 +38,7 @@ my $local_user = $ENV{LOGNAME};
 
 # Print out the attributes after pasing the config file.
 # For debugging purpose 
-print "\n\n";
+print "\n";
 print "\nZONE:\t\t\t$zone";
 print "\nAMI\t\t\t$ami";
 print "\nINSTANCE NAME PREFIX\t$instanceNamePrefix";
@@ -56,7 +56,9 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	deleteInstances(\@instanceNames, $instanceNamePrefix, $zone);
 } elsif ($mode == $MODE_INSTANCES_CREATE) {
 	# Create instance
-	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
+	if (Check_Resources("instance", $numberOfInstances) && Check_Resources("cpu", $numberOfInstances*$numberOfCores)) {
+		createInstances($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
+	}
 } elsif ($mode == $MODE_MOUNT_EPHEMERAL_DISK) {
 	# Mount ephemeral disks
 	if ($num_args != 3) {
@@ -69,9 +71,11 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 } elsif ($mode == $MODE_INSTALL_SGE) {
 	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $numberOfCores, $local_user);
 } elsif ($mode == $MODE_ADD_AN_INSTANCE) {
-	createInstances($zone, $ami, $instanceType, $instanceNamePrefix, 1);
-	@instanceNames = getInstanceNames($zone);
-	update_SGE (\@instanceNames, "add", $local_user);
+	if (Check_Resources("cpu", $numberOfInstances*$numberOfCores) && Check_Resources("instance", $numberOfInstances)) {
+		createInstances($zone, $ami, $instanceType, $instanceNamePrefix, 1);
+		@instanceNames = getInstanceNames($zone);
+		update_SGE (\@instanceNames, "add", $local_user);
+	}
 } else {
 	print "\n\n====================================================\n";
 	print "\n\nInvalid input MODE!!!! Please see usage below\n";
@@ -102,12 +106,47 @@ sub usage {
 
 
 #
-# Check Resource
+# Check Resources
 #
-sub Check_resources {
-	my @resources = `gcutil getproject`;
-}
+sub Check_Resources {
 
+	my $property = shift;
+	my $required_resource = shift;
+	my $project_resources;
+	my $current_resource;
+	my $overall_resource;
+	my $ diff;
+	my @line;
+
+
+	$project_resources = `gcutil getproject | grep $property | awk '{print \$4}'`;
+	chomp($project_resources);
+	$project_resources =~ s/\n\|$//;
+	@line = split("/", $project_resources);
+	$current_resource = $line[0];
+	$overall_resource = $line[1];
+	$diff = $overall_resource - $current_resource;
+
+	if ($property =~ /instance/) {
+		if ($diff > $required_resource) {
+			return 1;
+		} else {
+			print "\nPROBLEM [POSSIBLE QUOTA_EXCEED]:";
+			print "\n\tThe project resources: $property\[$current_resource/$overall_resource\] is not enough to create the demanded instances";
+			print "\n\tYou are asking a total of $required_resource instances, where only $diff is available\n\n";
+		}
+	} elsif ($property =~ /cpu/) {
+		if ($diff > $required_resource) {
+			return 1;
+		} else {
+			print "\nPROBLEM [POSSIBLE QUOTA_EXCEED]:";
+			print "\n\tThe project resources: $property\[$current_resource/$overall_resource\] is not enough to create the demanded instances";
+			print "\n\tYou are asking a total of $required_resource cores, where only $diff is available\n\n";
+		}
+	}
+	exit (2);
+
+}
 
 
 
@@ -179,7 +218,8 @@ sub  read_counter {
 
 
 #
-# create instances
+# MODE_CODE: 100
+# Create Instances
 #
 sub createInstances {
 
@@ -210,7 +250,8 @@ sub createInstances {
 
 
 # 
-# delete all instances based on the instance prefix 
+# MODE_CODE: 101
+# Delete all instances based on the instance prefix 
 # defined in the input configuration file
 #
 sub deleteInstances {
@@ -271,7 +312,9 @@ sub getInstanceNames {
 	return @iNames;
 }
 
+
 #
+# MODE_CODE: 102
 # Mount ephemeral disks
 #
 sub create_mount_ephemeral {
@@ -327,6 +370,7 @@ sub check_sge {
 
 
 #
+# MODE_CODE: 201
 # Remotely installing SGE 
 #
 sub installingSGE {
@@ -460,5 +504,13 @@ sub update_SGE {
 	
 }
 
+
+#
+# MODE_CODE: 202
+# Add extra instances
+#
+sub add_instance {
+	
+}
 
 
