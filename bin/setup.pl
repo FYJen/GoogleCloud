@@ -102,6 +102,16 @@ sub usage {
 
 
 #
+# Check Resource
+#
+sub Check_resources {
+	my @resources = `gcutil getproject`;
+}
+
+
+
+
+#
 # parse input config file
 #
 sub parseConfigFile {
