@@ -281,8 +281,8 @@ sub deleteInstances {
 		print "\n\ndone deleting instances $instances\n\n";
 	}
 	#remove counter file
-	unlink(".$instanceNamePrefix.counter.txt");
-	unlink<"*.$SGE_INSTALLATION_POSTFIX">;
+	unlink (".$instanceNamePrefix.counter.txt");
+	unlink <*.$SGE_INSTALLATION_POSTFIX>;
 	print "\n\n";
 }
 
