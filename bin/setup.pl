@@ -12,7 +12,7 @@ my $MODE_INSTANCES_DELETE = 101;
 # instance specific 
 my $MODE_MOUNT_EPHEMERAL_DISK = 102;
 my $MODE_INSTALL_SGE = 201;
-my $MODE_ADD_AN_INSTANCE = 202;
+my $MODE_ADD_MULTIPLE_INSTANCES = 202;
 
 
 my $SGE_INSTALLATION_POSTFIX = "GoogleCloud.SGE.installation.log";
@@ -70,11 +70,14 @@ if ($mode == $MODE_INSTANCES_DELETE) {
 	create_mount_ephemeral(\@instanceNames, $instanceNamePrefix, $zone, $path, $numberOfInstances );
 } elsif ($mode == $MODE_INSTALL_SGE) {
 	create_SGE(\@instanceNames, $configFile, $instanceNamePrefix, $numberOfCores, $local_user);
-} elsif ($mode == $MODE_ADD_AN_INSTANCE) {
+} elsif ($mode == $MODE_ADD_MULTIPLE_INSTANCES) {
+	print "\n\nAdding more compute power to existing SGE Cluster.";
+	print "\nHow many instances would you want to add (1, 2, 3, ...)? ";
+	chomp($numberOfInstances = <STDIN>);
 	if (Check_Resources("cpu", $numberOfInstances*$numberOfCores) && Check_Resources("instance", $numberOfInstances)) {
-		createInstances($zone, $ami, $instanceType, $instanceNamePrefix, 1);
+		createInstances($zone, $ami, $instanceType, $instanceNamePrefix, $numberOfInstances);
 		@instanceNames = getInstanceNames($zone);
-		update_SGE (\@instanceNames, "add", $local_user);
+		update_SGE (\@instanceNames, "add", $local_user, $numberOfInstances);
 	}
 } else {
 	print "\n\n====================================================\n";
@@ -99,7 +102,7 @@ sub usage {
 	print "\n\t\t\t[PATH]\tpath prefix to mount ephemeral disk(s) to";
 	print "\n";
 	print "\n\t\t$MODE_INSTALL_SGE\tinstall Sun Grid Engine (SGE) on the instances created. ";
-	print "\n\t\t$MODE_ADD_AN_INSTANCE\tadd additional instances to the SGE cluster. ";
+	print "\n\t\t$MODE_ADD_MULTIPLE_INSTANCES\tadd additional instances to the SGE cluster. ";
 	print "\n\n";
 	exit (2);
 }
@@ -279,7 +282,7 @@ sub deleteInstances {
 	}
 	#remove counter file
 	unlink(".$instanceNamePrefix.counter.txt");
-	unlink("*.$SGE_INSTALLATION_POSTFIX");
+	unlink<"*.$SGE_INSTALLATION_POSTFIX">;
 	print "\n\n";
 }
 
@@ -330,7 +333,11 @@ sub create_mount_ephemeral {
 
 	foreach my $k (@instanceNames) {
 		$pm->start and next;
-		system ("gcutil ssh $k 'cat | perl /dev/stdin $path' < bin/mount_ephemeral.pl ");	
+		AGAIN:
+		system ("gcutil ssh $k 'cat | perl /dev/stdin $path' < bin/mount_ephemeral.pl ");
+		if ($? != 0) {
+			goto AGAIN;
+		}	
 		$pm->finish;
 	}
 
@@ -348,7 +355,7 @@ sub check_sge {
 
 	my $master_node = shift;
 
-	my @output = `gcutil ssh $master_node 'ps aux | grep sge | cut --delimiter=" " --field=1 | head -2'`;
+	my @output = `gcutil ssh $master_node 'ps aux | grep sge | cut --delimiter=" " --field=1 | head -2' `;
 	my $num_ele = @output;
 
 	if ($num_ele == 2) {
@@ -381,12 +388,20 @@ sub installingSGE {
 
 	if ($action eq "master") {
 		print "Installing SGE on master node -  $target ... it may take a few minutes ... \n\n";
+		AGAIN_master:
 		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_master.pl &> $target.$SGE_INSTALLATION_POSTFIX");
+		if ($? != 0) {
+			goto AGAIN_master;
+		}
 		print "SGE master node  \($target\) installation ... done ...\n\n";
 	} else {
-		# Action = compute
+		# Action = computex
 		print "Installing SGE on compute node - $target ... it may take a few minutes ... \n\n";
+		AGAIN_compute:
 		system ("gcutil ssh $target 'cat | perl /dev/stdin $arg' < bin/install_sge_compute.pl &> $target.$SGE_INSTALLATION_POSTFIX");
+		if ($? != 0) {
+			goto AGAIN_compute;
+		}
 		print "SGE compute node \($target\) installation ... done ...\n\n";
 	}
 }
@@ -478,39 +493,52 @@ sub update_SGE {
 	# List of my instanceNames
 	my $array = shift;
 	my @instanceNames = @$array;
-	# Process the instanceNames list 
-	my $master_node = $instanceNames[0]; # We make first element as our master_node. 
-	my $index = $#instanceNames; # Get the index of the last element because it is the new added node
-	my $target_node = $instanceNames[$index];
 
 	# What action it is (add/delete)
 	my $action = shift;
 	# Local user
 	my $local_user = shift;
+	# Number of newly added instances
+	my $numberOfInstances = shift;
+	
+	# Process the instanceNames list 
+	my $new_nodes = "";
+	my $master_node = $instanceNames[0]; # We make first element as our master_node. 
+	my $index = $#instanceNames; # Get the index of the last element because it is the new added node
+	for (my $i = 0; $i < $numberOfInstances; $i++) {
+		my $node = $instanceNames[$index-$i];
+		$new_nodes .= " ".$node;
+	}
+	$new_nodes =~ s/^\s+//;
+	my @target_nodes = split(" ", $new_nodes);
+
+	#Combine variables
+	my $arg = $local_user." ".$new_nodes;
 
 	# Check for SGE installation
 	check_sge($master_node);
 
-	#Combine variables
-	my $arg = $local_user." ".$target_node;
-
+	# Start Fork
+	my $pm = Parallel::ForkManager->new($numberOfInstances);
 	if ($action eq "add") {
-		system ("gcutil ssh $master_node 'cat | perl /dev/stdin $arg' < bin/add_an_instance.pl");
-		system ("gcutil ssh $target_node 'cat | perl /dev/stdin $master_node' < bin/install_sge_compute.pl");
-	} else { 
-		system ("gcutil deleteinstance -f $target_node 2>&1 | tee instances.deletion.log");
+		
+		# Update SGE master
+		print "\nUpdating/Adding $new_nodes to $master_node configuration file ... \n\n";
+		system ("gcutil ssh $master_node 'cat | perl /dev/stdin $arg' < bin/add_multiple_instances.pl &> $master_node.$SGE_INSTALLATION_POSTFIX");
 
+		# Update SGE compute
+		foreach my $k (@target_nodes) {
+			$pm->start and next;
+			installingSGE("compute", $k, $master_node);
+			$pm->finish;
+		}
+		$pm->wait_all_children;
+	} else { 
+		#deleteInstances(\@target_nodes, $instanceNamePrefix, $zone);
+		#system ("gcutil deleteinstance -f $target_node 2>&1 | tee instances.deletion.log");
 	}
 	
 }
 
-
-#
-# MODE_CODE: 202
-# Add extra instances
-#
-sub add_instance {
-	
-}
 
 
