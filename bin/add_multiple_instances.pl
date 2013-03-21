@@ -4,8 +4,8 @@ use warnings;
 use strict;
 
 
-#Global Variables:
-#===============================
+# Global Variables:
+#=============================================================
 
 # System envrionment variables
 my $host_name = `hostname`;
@@ -15,12 +15,33 @@ my $exe_file = "exe_host.txt";
 # Local user
 my $local_user = shift;
 chomp($local_user);
-#Instance name 
-my $iName = shift;
+
+
+
+# Function Calls
+#=============================================================
+foreach my $k (@ARGV) {
+	# Add the addition instance to submission host list
+	system ("qconf -as $k");
+
+# Add the addition instnace to execution host list
+	system ("qconf -se $host_name >> $exe_file 2>>/dev/null");
+	generate_template($exe_file);
+	# Set initial $find_string variable
+	my $find_string = $host_name;
+	#Use the template 
+	edit_file($exe_file, $find_string, $k);
+	system ("qconf -Ae $exe_file 2>> /dev/null");
+
+# Add exec host to the @allhosts list
+	system ("qconf -aattr hostgroup hostlist $k \@allhosts");
+}
+
+
 
 
 # Functions
-#======================================
+#=============================================================
 
 #
 # Purpose: edit SGE config files
@@ -67,21 +88,5 @@ sub generate_template {
 }
 
 
-
-
-# Add the addition instance to submission host list
-	system ("qconf -as $iName");
-
-# Add the addition instnace to execution host list
-	system ("qconf -se $host_name >> $exe_file 2>>/dev/null");
-	generate_template($exe_file);
-	# Set initial $find_string variable
-	my $find_string = $host_name;
-	#Use the template 
-	edit_file($exe_file, $find_string, $iName);
-	system ("qconf -Ae $exe_file 2>> /dev/null");
-
-# Add exec host to the @allhosts list
-	system ("qconf -aattr hostgroup hostlist $iName \@allhosts");
 
 
