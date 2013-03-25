@@ -1,4 +1,4 @@
-# Copyright 2012 Google Inc.
+# Copyright 2012 Google Inc. All Rights Reserved.
 #coding=utf8
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,11 @@
 
 import boto
 import csv
+import random
 import StringIO
+import time
 
+from boto.exception import GSResponseError
 from boto.s3.key import Key
 from gslib.command import COMMAND_NAME
 from gslib.command import COMMAND_NAME_ALIASES
@@ -37,6 +40,7 @@ from gslib.help_provider import HELP_TYPE
 from gslib.help_provider import HelpType
 from gslib.name_expansion import NameExpansionIterator
 from gslib.util import NO_MAX
+from gslib.util import Retry
 
 _detailed_help_text = ("""
 <B>SYNOPSIS</B>
@@ -57,13 +61,17 @@ _detailed_help_text = ("""
   For example, the following command would set the Content-Type and
   Cache-Control and remove the Content-Disposition on the specified objects:
 
-    gsutil setmeta -h "Content-Type:text/html" -h "Cache-Control:public, max-age=3600" -h "Content-Disposition" gs://bucket/*.html
+    gsutil setmeta -h "Content-Type:text/html" \\
+      -h "Cache-Control:public, max-age=3600" \\
+      -h "Content-Disposition" gs://bucket/*.html
 
   If you have a large number of objects to update you might want to use the
   gsutil -m option, to perform a parallel (multi-threaded/multi-processing)
   update:
 
-    gsutil -m setmeta -h "Content-Type:text/html" -h "Cache-Control:public, max-age=3600" -h "Content-Disposition" gs://bucket/*.html
+    gsutil -m setmeta -h "Content-Type:text/html" \\
+      -h "Cache-Control:public, max-age=3600" \\
+      -h "Content-Disposition" gs://bucket/*.html
 
   See "gsutil help metadata" for details about how you can set metadata
   while uploading objects, what metadata fields can be set and the meaning of
@@ -110,7 +118,9 @@ _detailed_help_text = ("""
   set. For example, the following command would set the Content-Type and
   Cache-Control and remove the Content-Disposition on the specified objects:
 
-    gsutil setmeta -h "Content-Type:text/html" -h "Cache-Control:public, max-age=3600" -h "Content-Disposition" gs://bucket/*.html
+    gsutil setmeta -h "Content-Type:text/html" \\
+      -h "Cache-Control:public, max-age=3600" \\
+      -h "Content-Disposition" gs://bucket/*.html
 
   This form only works if the header name and value don't contain double
   quotes or commas, and only works for setting the header value (not for
@@ -142,7 +152,7 @@ _detailed_help_text = ("""
 Note that if you use the gsutil setmeta command on an object in a bucket
 with versioning enabled (see 'gsutil help versioning'), it will create
 a new object version (and thus, you will get charged for the space required
-for holding the additional version.
+for holding the additional version).
 """)
 
 
@@ -213,12 +223,27 @@ class SetMetaCommand(Command):
       self.THREADED_LOGGER.error(str(e))
       self.everything_set_okay = False
 
+    @Retry(GSResponseError, tries=3, delay=1, backoff=2)
     def _SetMetadataFunc(name_expansion_result):
       exp_src_uri = self.suri_builder.StorageUri(
           name_expansion_result.GetExpandedUriStr())
-      self.THREADED_LOGGER.info('Setting metadata on %s...' % exp_src_uri)
-      exp_src_uri.set_metadata(metadata_plus, metadata_minus, preserve_acl)
-
+      self.THREADED_LOGGER.info('Setting metadata on %s...', exp_src_uri)
+      
+      key = exp_src_uri.get_key()
+      meta_generation = key.meta_generation
+      generation = key.generation
+            
+      headers = {}
+      if generation:
+        headers['x-goog-if-generation-match'] = generation
+      if meta_generation:
+        headers['x-goog-if-metageneration-match'] = meta_generation
+          
+      # If this fails because of a precondition, it will raise a 
+      # GSResponseError for @Retry to handle.
+      exp_src_uri.set_metadata(metadata_plus, metadata_minus, preserve_acl, 
+                                 headers=headers)
+      
     name_expansion_iterator = NameExpansionIterator(
         self.command_name, self.proj_id_handler, self.headers, self.debug,
         self.bucket_storage_uri_class, uri_args, self.recursion_requested,
@@ -385,74 +410,6 @@ class SetMetaCommand(Command):
     metadata_plus.update(cust_metadata_plus)
     metadata_minus.update(cust_metadata_minus)
     return (metadata_minus, metadata_plus)
-
-  # Test specification. See definition of test_steps in base class for
-  # details on how to populate these fields.
-  test_steps = [
-    # (test name, cmd line, ret code, (result_file, expect_file))
-    ('upload', 'gsutil -h "x-goog-meta-xyz:abc" '
-     '-h "Content-Type:image/gif" cp $F1 gs://$B1/$O1', 0, None),
-    ('setup gif CT', 'echo image/gif >test_gif.ct', 0, None),
-    ('setup html CT', 'echo text/html >test_html.ct', 0, None),
-    ('setup META', 'echo "abc" >test.meta', 0, None),
-    ('retrieve initial metadata', 'gsutil ls -L gs://$B1/$O1 >$F1', 0, None),
-    ('verify initial Content-Type', 'grep Content-Type $F1 | cut -f3 >$F2',
-      0, ('$F2', 'test_gif.ct')),
-    ('verify initial x-goog-meta-xyz',
-     'grep x-goog-meta-xyz $F1 | cut -f3 > $F2', 0, ('$F2', 'test.meta')),
-    ('run setmeta',
-     'gsutil setmeta -n -h Content-Type:text/html -h x-goog-meta-xyz '
-     'gs://$B1/$O1', 0, None),
-    ('retrieve new metadata', 'gsutil ls -L gs://$B1/$O1 >$F1', 0, None),
-    ('verify new Content-Type', 'grep Content-Type $F1 | cut -f3 >$F2',
-      0, ('$F2', 'test_html.ct')),
-    ('verify new x-goog-meta-xyz', 'grep -q xyz $F1', 1, None),
-    # Test handling of various illegal setmeta commands.
-    ('test missing header value',
-     'gsutil setmeta \'"Content-Type"\' gs://$B1/$O1', 1, None),
-    ('test value included with minus header',
-     'gsutil setmeta \'"-Content-Type:text/html"\' gs://$B1/$O1', 1, None),
-    ('test header included as both plus and minus header',
-     'gsutil setmeta \'"Content-Type:text/html","-Content-Type"\' gs://$B1/$O1',
-     1, None),
-    ('test non-ASCII custom header',
-     'gsutil setmeta \'"x-goog-meta-soufflé:5"\' gs://$B1/$O1', 1, None),
-    ('test disallowed header',
-     'gsutil setmeta \'"Content-Length:5"\' gs://$B1/$O1', 1, None),
-     #
-     # Older (deprecated) syntax tests:
-    ('upload', 'gsutil -h "x-goog-meta-xyz:abc" '
-     '-h "Content-Type:image/gif" cp $F1 gs://$B1/$O1', 0, None),
-    ('setup gif CT', 'echo image/gif >test_gif.ct', 0, None),
-    ('setup html CT', 'echo text/html >test_html.ct', 0, None),
-    ('setup META', 'echo "abc" >test.meta', 0, None),
-    ('retrieve initial metadata', 'gsutil ls -L gs://$B1/$O1 >$F1', 0, None),
-    ('verify initial Content-Type', 'grep Content-Type $F1 | cut -f3 >$F2',
-      0, ('$F2', 'test_gif.ct')),
-    ('verify initial x-goog-meta-xyz',
-     'grep x-goog-meta-xyz $F1 | cut -f3 > $F2', 0, ('$F2', 'test.meta')),
-    ('run setmeta (deprecated syntax)',
-     'gsutil setmeta -n \'"Content-Type:text/html","-x-goog-meta-xyz"\' '
-     'gs://$B1/$O1', 0, None),
-    ('retrieve new metadata', 'gsutil ls -L gs://$B1/$O1 >$F1', 0, None),
-    ('verify new Content-Type', 'grep Content-Type $F1 | cut -f3 >$F2',
-      0, ('$F2', 'test_html.ct')),
-    ('verify new x-goog-meta-xyz', 'grep -q xyz $F1', 1, None),
-    # Test handling of various illegal setmeta commands.
-    ('test missing header value',
-     'gsutil setmeta \'"Content-Type"\' gs://$B1/$O1', 1, None),
-    ('test value included with minus header',
-     'gsutil setmeta \'"-Content-Type:text/html"\' gs://$B1/$O1', 1, None),
-    ('test header included as both plus and minus header',
-     'gsutil setmeta \'"Content-Type:text/html","-Content-Type"\' gs://$B1/$O1',
-     1, None),
-    ('test non-ASCII custom header',
-     'gsutil setmeta \'"x-goog-meta-soufflé:5"\' gs://$B1/$O1', 1, None),
-    ('test disallowed header',
-     'gsutil setmeta \'"Content-Length:5"\' gs://$B1/$O1', 1, None),
-     #
-    ('remove test files', 'rm -f test_gif.ct test_html.ct test.meta', 0, None),
-  ]
 
 
 def _InsistAsciiHeader(header):

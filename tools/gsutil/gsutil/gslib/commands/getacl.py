@@ -1,4 +1,4 @@
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,15 +36,6 @@ _detailed_help_text = ("""
 <B>DESCRIPTION</B>
   Gets ACL XML for a bucket or object, which you can save and edit for the
   setacl command.
-
-
-<B>OPTIONS</B>
-  -v          Parses uris for version / generation numbers (only applicable in 
-              version-enabled buckets). For example:
-
-                gsutil getacl -v gs://bucket/object#1348772910166013
-
-              Note that wildcards are not permitted while using this flag.
 """)
 
 

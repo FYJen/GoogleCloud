@@ -1,4 +1,4 @@
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ class HelpCommand(Command):
     # Name of command.
     COMMAND_NAME : 'help',
     # List of command name aliases.
-    COMMAND_NAME_ALIASES : ['?'],
+    COMMAND_NAME_ALIASES : ['?', 'man'],
     # Min number of args required by this command.
     MIN_ARGS : 0,
     # Max number of args required by this command, or NO_MAX.
@@ -163,7 +163,7 @@ class HelpCommand(Command):
       import fcntl
       import termios
     except ImportError:
-      return _DEFAULT_LINES
+      return self._DEFAULT_LINES
     def ioctl_GWINSZ(fd):
       try:
         return struct.unpack(
@@ -181,10 +181,7 @@ class HelpCommand(Command):
       except:
         pass
     if not ioc:
-      if 'LINES' in os.environ:
-        ioc = env['LINES']
-      else:
-        ioc = _DEFAULT_LINES
+      ioc = os.environ.get('LINES', self._DEFAULT_LINES)
     return int(ioc)
 
   def _LoadHelpMaps(self):

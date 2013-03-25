@@ -1,4 +1,4 @@
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 # Copyright 2011, Nexenta Systems Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,20 +22,23 @@ import os
 import platform
 import re
 import subprocess
+import stat
 import sys
 import tempfile
 import threading
 import time
 
-from boto.gs.resumable_upload_handler import ResumableUploadHandler
 from boto import config
-from boto.s3.resumable_download_handler import ResumableDownloadHandler
 from boto.exception import GSResponseError
 from boto.exception import ResumableUploadException
-from gslib.command import Command
+from boto.gs.resumable_upload_handler import ResumableUploadHandler
+from boto.s3.keyfile import KeyFile
+from boto.s3.resumable_download_handler import ResumableDownloadHandler
+from boto.storage_uri import BucketStorageUri
 from gslib.command import COMMAND_NAME
 from gslib.command import COMMAND_NAME_ALIASES
 from gslib.command import CONFIG_REQUIRED
+from gslib.command import Command
 from gslib.command import FILE_URIS_OK
 from gslib.command import MAX_ARGS
 from gslib.command import MIN_ARGS
@@ -47,21 +50,23 @@ from gslib.help_provider import HELP_NAME
 from gslib.help_provider import HELP_NAME_ALIASES
 from gslib.help_provider import HELP_ONE_LINE_SUMMARY
 from gslib.help_provider import HELP_TEXT
-from gslib.help_provider import HelpType
 from gslib.help_provider import HELP_TYPE
+from gslib.help_provider import HelpType
 from gslib.name_expansion import NameExpansionIterator
+from gslib.util import ExtractErrorDetail
+from gslib.util import IS_WINDOWS
 from gslib.util import MakeHumanReadable
 from gslib.util import NO_MAX
-from gslib.util import ONE_MB
+from gslib.util import TWO_MB
 from gslib.wildcard_iterator import ContainsWildcard
 
 _detailed_help_text = ("""
 <B>SYNOPSIS</B>
-  gsutil cp [-a canned_acl] [-e] [-p] [-q] [-z ext1,ext2,...] src_uri dst_uri
+  gsutil cp [OPTION]... src_uri dst_uri
     - or -
-  gsutil cp [-a canned_acl] [-e] [-p] [-q] [-R] [-z extensions] src_uri... dst_uri
+  gsutil cp [OPTION]... src_uri... dst_uri
     - or -
-  gsutil cp [-a canned_acl] [-e] [-p] [-q] [-R] [-z extensions] -I dst_uri
+  gsutil cp [OPTION]... -I dst_uri
 
 
 <B>DESCRIPTION</B>
@@ -98,7 +103,7 @@ _detailed_help_text = ("""
 
 <B>HOW NAMES ARE CONSTRUCTED</B>
   The gsutil cp command strives to name objects in a way consistent with how
-  Unix cp works, which causes names to be constructed in varying ways depending
+  Linux cp works, which causes names to be constructed in varying ways depending
   on whether you're performing a recursive directory copy or copying
   individually named objects; and whether you're copying to an existing or
   non-existent directory.
@@ -167,9 +172,9 @@ _detailed_help_text = ("""
   you could perform concurrent downloads across 3 machines by running these
   commands on each machine, respectively:
 
-    gsutil cp -R gs://my_bucket/data/result_set_[0-3]* dir
-    gsutil cp -R gs://my_bucket/data/result_set_[4-6]* dir
-    gsutil cp -R gs://my_bucket/data/result_set_[7-9]* dir
+    gsutil -m cp -R gs://my_bucket/data/result_set_[0-3]* dir
+    gsutil -m cp -R gs://my_bucket/data/result_set_[4-6]* dir
+    gsutil -m cp -R gs://my_bucket/data/result_set_[7-9]* dir
 
   Note that dir could be a local directory on each machine, or it could
   be a directory mounted off of a shared file server; whether the latter
@@ -193,17 +198,19 @@ _detailed_help_text = ("""
   "gsutil help setdefacl").  You can override this behavior with the -p
   option (see OPTIONS below).
 
+  gsutil does not preserve metadata when copying objects between providers.
+
 
 <B>RESUMABLE TRANSFERS</B>
   gsutil automatically uses the Google Cloud Storage resumable upload
   feature whenever you use the cp command to upload an object that is larger
-  than 1 MB. You do not need to specify any special command line options
+  than 2 MB. You do not need to specify any special command line options
   to make this happen. If your upload is interrupted you can restart the
   upload by running the same cp command that you ran to start the upload.
 
   Similarly, gsutil automatically performs resumable downloads (using HTTP
   standard Range GET operations) whenever you use the cp command to download an
-  object larger than 1 MB.
+  object larger than 2 MB.
 
   Resumable uploads and downloads store some state information in a file
   in ~/.gsutil named by the destination object or file. If you attempt to
@@ -229,10 +236,7 @@ _detailed_help_text = ("""
     - when compressing data to be uploaded (see the -z option)
     - when decompressing data being downloaded (when the data has
       Content-Encoding:gzip, e.g., as happens when uploaded using gsutil cp -z)
-    - when copying between cloud service providers, where the destination
-      provider does not support streaming uploads. In this case each object
-      is downloaded from the source provider to a temp file, and then uploaded
-      from that temp file to the destination provider.
+    - when running integration tests (using the gsutil test command)
 
   In these cases it's possible the temp file location on your system that
   gsutil selects by default may not have enough space. If you find that
@@ -240,7 +244,12 @@ _detailed_help_text = ("""
   "CommandException: Inadequate temp space available to compress <your file>"
   during a gsutil cp -z operation), you can change where it writes these
   temp files by setting the TMPDIR environment variable. On Linux and MacOS
-  you can do this using:
+  you can do this either by running gsutil this way:
+
+    TMPDIR=/some/directory gsutil cp ...
+
+  or by adding this line to your ~/.bashrc file and then restarting the shell
+  before running gsutil:
 
     export TMPDIR=/some/directory
 
@@ -251,115 +260,119 @@ _detailed_help_text = ("""
 
 
 <B>OPTIONS</B>
-  -a          Sets named canned_acl when uploaded objects created. See
-              'gsutil help acls' for further details.
+  -a canned_acl Sets named canned_acl when uploaded objects created. See
+                'gsutil help acls' for further details.
 
-  -c          If an error occurrs, continue to attempt to copy the remaining
-              files.
+  -c            If an error occurrs, continue to attempt to copy the remaining
+                files.
 
-  -e          Exclude symlinks. When specified, symbolic links will not be
-              copied.
+  -D            Copy in "daisy chain" mode, i.e., copying between two buckets by
+                hooking a download to an upload, via the machine where gsutil is
+                run. By default, data are copied between two buckets "in the
+                cloud", i.e., without needing to copy via the machine where
+                gsutil runs. However, copy-in-the-cloud is not supported when
+                copying between different locations (like US and EU) or between
+                different storage classes (like STANDARD and
+                DURABLE_REDUCED_AVAILABILITY). For these cases, you can use the
+                -D option to copy data between buckets.
+                Note: Daisy chain mode is automatically used when copying
+                between providers (e.g., to copy data from Google Cloud Storage
+                to another provider).
 
-  -n          No-clobber. When specified, existing files or objects at the
-              destination will not be overwritten. Any items that are skipped
-              by this option will be reported as being skipped.
+  -e            Exclude symlinks. When specified, symbolic links will not be
+                copied.
 
-              Please note that using this feature will make gsutil perform
-              additional HTTP requests for every item being copied. This may
-              increase latency and cost.
+  -n            No-clobber. When specified, existing files or objects at the
+                destination will not be overwritten. Any items that are skipped
+                by this option will be reported as being skipped. This option
+                will perform an additional HEAD request to check if an item
+                exists before attempting to upload the data. This will save
+                retransmitting data, but the additional HTTP requests may make
+                small object transfers slower and more expensive.
 
-  -p          Causes ACL to be preserved when copying in the cloud. Note that
-              this option has performance and cost implications, because it
-              is essentially performing three requests (getacl, cp, setacl).
-              (The performance issue can be mitigated to some degree by
-              using gsutil -m cp to cause parallel copying.)
+                This option can be combined with the -c option to build a script
+                that copies a large number of objects, allowing retries when
+                some failures occur from which gsutil doesn't automatically
+                recover, using a bash script like the following:
 
-	      You can avoid the additional performance and cost of using cp -p
-	      if you want all objects in the destination bucket to end up with
-	      the same ACL, but setting a default ACL on that bucket instead of
-	      using cp -p. See "help gsutil setdefacl".
+                    status=1
+                    while [ $status -ne 0 ] ; do
+                        gsutil cp -c -n -R ./dir gs://bucket
+                        status=$?
+                    done
 
-              Note that it's not valid to specify both the -a and -p options
-              together.
+                The -c option will cause copying to continue after failures
+                occur, and the -n option will cause objects already copied to be
+                skipped on subsequent iterations. The loop will continue running
+                as long as gsutil exits with a non-zero status (such a status
+                indicates there was at least one failure during the gsutil run).
 
-  -q          Causes copies to be performed quietly, i.e., without reporting
-              progress indicators of files being copied. Errors are still
-              reported. This option can be useful for running gsutil from a
-              cron job that logs its output to a file, for which the only
-              information desired in the log is failures.
+  -p            Causes ACLs to be preserved when copying in the cloud. Note that
+                this option has performance and cost implications, because it
+                is essentially performing three requests (getacl, cp, setacl).
+                (The performance issue can be mitigated to some degree by
+                using gsutil -m cp to cause parallel copying.)
 
-  -R, -r      Causes directories, buckets, and bucket subdirectories to be
-              copied recursively. If you neglect to use this option for
-              an upload, gsutil will copy any files it finds and skip any
-              directories. Similarly, neglecting to specify -R for a download
-              will cause gsutil to copy any objects at the current bucket
-              directory level, and skip any subdirectories.
+                You can avoid the additional performance and cost of using cp -p
+                if you want all objects in the destination bucket to end up with
+                the same ACL by setting a default ACL on that bucket instead of
+                using cp -p. See "help gsutil setdefacl".
 
-  -t          DEPRECATED. At one time this option was used to request setting
-              Content-Type based on file extension and/or content, which is
-              now the default behavior. The -t option is left in place for
-              now to avoid breaking existing scripts. It will be removed at
-              a future date.
+                Note that it's not valid to specify both the -a and -p options
+                together.
 
-  -v          Parses uris for version / generation numbers (only applicable in
-              version-enabled buckets). For example:
+  -q            Causes copies to be performed quietly, i.e., without reporting
+                progress indicators of files being copied. Errors are still
+                reported. This option can be useful for running gsutil from a
+                cron job that logs its output to a file, for which the only
+                information desired in the log is failures.
 
-                gsutil cp -v gs://bucket/object#1348772910166013 ~/Desktop
+  -R, -r        Causes directories, buckets, and bucket subdirectories to be
+                copied recursively. If you neglect to use this option for
+                an upload, gsutil will copy any files it finds and skip any
+                directories. Similarly, neglecting to specify -R for a download
+                will cause gsutil to copy any objects at the current bucket
+                directory level, and skip any subdirectories.
 
-              Note that wildcards are not permitted while using this flag.
+  -v            Requests that the version-specific URI for each uploaded object
+                be printed. Given this URI you can make future upload requests
+                that are safe in the face of concurrent updates, because Google
+                Cloud Storage will refuse to perform the update if the current
+                object version doesn't match the version-specific URI. See
+                'gsutil help versioning' for more details. Note: at present this
+                option does not work correctly for objects copied "in the cloud"
+                (e.g., gsutil cp gs://bucket/obj1 gs://bucket/obj2).
 
-  -z          'txt,html' Compresses file uploads with the given extensions.
-              If you are uploading a large file with compressible content,
-              such as a .js, .css, or .html file, you can gzip-compress the
-              file during the upload process by specifying the -z <extensions>
-              option. Compressing data before upload saves on usage charges
-              because you are uploading a smaller amount of data.
+  -z ext1,...   Compresses file uploads with the given extensions. If you are
+                uploading a large file with compressible content, such as
+                a .js, .css, or .html file, you can gzip-compress the file
+                during the upload process by specifying the -z <extensions>
+                option. Compressing data before upload saves on usage charges
+                because you are uploading a smaller amount of data.
 
-              When you specify the -z option, the data from your files is
-              compressed before it is uploaded, but your actual files are left
-              uncompressed on the local disk. The uploaded objects retain the
-              original content type and name as the original files but are given
-              a Content-Encoding header with the value "gzip" to indicate that
-              the object data stored are compressed on the Google Cloud Storage
-              servers.
+                When you specify the -z option, the data from your files is
+                compressed before it is uploaded, but your actual files are left
+                uncompressed on the local disk. The uploaded objects retain the
+                original content type and name as the original files but are
+                given a Content-Encoding header with the value "gzip" to
+                indicate that the object data stored are compressed on the
+                Google Cloud Storage servers.
 
-              For example, the following command:
+                For example, the following command:
 
-                gsutil cp -z html -a public-read cattypes.html gs://mycats
+                  gsutil cp -z html -a public-read cattypes.html gs://mycats
 
-              will do all of the following:
-                - Upload as the object gs://mycats/cattypes.html (cp command)
-                - Set the Content-Type to text/html (based on file extension)
-                - Compress the data in the file cattypes.html (-z option)
-                - Set the Content-Encoding to gzip (-z option)
-                - Set the ACL to public-read (-a option)
-                - If a user tries to view cattypes.html in a browser, the
-                  browser will know to uncompress the data based on the
-                  Content-Encoding header, and to render it as HTML based on
-                  the Content-Type header.
+                will do all of the following:
+                  - Upload as the object gs://mycats/cattypes.html (cp command)
+                  - Set the Content-Type to text/html (based on file extension)
+                  - Compress the data in the file cattypes.html (-z option)
+                  - Set the Content-Encoding to gzip (-z option)
+                  - Set the ACL to public-read (-a option)
+                  - If a user tries to view cattypes.html in a browser, the
+                    browser will know to uncompress the data based on the
+                    Content-Encoding header, and to render it as HTML based on
+                    the Content-Type header.
 """)
-
-class KeyFile():
-    """
-    Wrapper class to expose Key class as file to boto.
-    """
-    def __init__(self, key):
-        self.key = key
-
-    def tell(self):
-        raise IOError
-
-    def seek(self, pos):
-        raise IOError
-
-    def read(self, size):
-	return self.key.read(size)
-
-    def write(self, buf):
-        raise IOError
-
-    def close(self):
-        self.key.close()
 
 class CpCommand(Command):
   """
@@ -398,7 +411,7 @@ class CpCommand(Command):
     MAX_ARGS : NO_MAX,
     # Getopt-style string specifying acceptable sub args.
     # -t is deprecated but leave intact for now to avoid breakage.
-    SUPPORTED_SUB_ARGS : 'a:ceIMnpqrRtvz:',
+    SUPPORTED_SUB_ARGS : 'a:cDeIMNnpqrRtvz:',
     # True if file URIs acceptable for this command.
     FILE_URIS_OK : True,
     # True if provider-only URIs acceptable for this command.
@@ -568,15 +581,31 @@ class CpCommand(Command):
       upload: bool indication of whether transfer is an upload.
     """
     config = boto.config
-    resumable_threshold = config.getint('GSUtil', 'resumable_threshold', ONE_MB)
+    resumable_threshold = config.getint('GSUtil', 'resumable_threshold', TWO_MB)
     transfer_handler = None
     cb = None
     num_cb = None
 
-    if size >= resumable_threshold:
+    # Checks whether the destination file is a "special" file, like /dev/null on
+    # Linux platforms or null on Windows platforms, so we can disable resumable
+    # download support since the file size of the destination won't ever be
+    # correct.
+    dst_is_special = False
+    if dst_uri.is_file_uri():
+      # Check explicitly first because os.stat doesn't work on 'nul' in Windows.
+      if dst_uri.object_name == os.devnull:
+        dst_is_special = True
+      try:
+        mode = os.stat(dst_uri.object_name).st_mode
+        if stat.S_ISCHR(mode):
+          dst_is_special = True
+      except OSError:
+        pass
+
+    if size >= resumable_threshold and not dst_is_special:
       if not self.quiet:
         cb = self._FileCopyCallbackHandler(upload).call
-        num_cb = int(size / ONE_MB)
+        num_cb = int(size / TWO_MB)
 
       resumable_tracker_dir = config.get(
           'GSUtil', 'resumable_tracker_dir',
@@ -623,14 +652,30 @@ class CpCommand(Command):
 
   # We pass the headers explicitly to this call instead of using self.headers
   # so we can set different metadata (like Content-Type type) for each object.
-  def _CopyObjToObjSameProvider(self, src_key, src_uri, dst_uri, headers):
+  def _CopyObjToObjInTheCloud(self, src_key, src_uri, dst_uri, headers):
+    """Performs copy-in-the cloud from specified src to dest object.
+
+    Args:
+      src_key: Source Key.
+      src_uri: Source StorageUri.
+      dst_uri: Destination StorageUri.
+      headers: A copy of the headers dictionary.
+
+    Returns:
+      (elapsed_time, bytes_transferred, dst_uri) excluding overhead like initial
+      HEAD. Note: At present copy-in-the-cloud doesn't return the generation of
+      the created object, so the returned URI is actually not version-specific
+      (unlike other cp cases).
+
+    Raises:
+      CommandException: if errors encountered.
+    """
     self._SetContentTypeHeader(src_uri, headers)
     self._LogCopyOperation(src_uri, dst_uri, headers)
     # Do Object -> object copy within same provider (uses
     # x-<provider>-copy-source metadata HTTP header to request copying at the
     # server).
     src_bucket = src_uri.get_bucket(False, headers)
-    dst_bucket = dst_uri.get_bucket(False, headers)
     preserve_acl = False
     canned_acl = None
     if self.sub_opts:
@@ -657,12 +702,23 @@ class CpCommand(Command):
     #   gsutil cp -t Content-Type text/html gs://bucket/* gs://bucket2
     # to change the Content-Type while copying.
 
-    dst_uri.copy_key(src_bucket.name, src_uri.object_name,
-                     preserve_acl=False, headers=headers,
-                     src_version_id=src_uri.version_id,
-                     src_generation=src_uri.generation)
+    try:
+      dst_key = dst_uri.copy_key(
+          src_bucket.name, src_uri.object_name, preserve_acl=False,
+          headers=headers, src_version_id=src_uri.version_id,
+          src_generation=src_uri.generation)
+    except GSResponseError as e:
+      exc_name, error_detail = ExtractErrorDetail(e)
+      if (exc_name == 'GSResponseError'
+          and ('Copy-in-the-cloud disallowed' in error_detail)):
+          raise CommandException('%s.\nNote: you can copy between locations '
+                                 'and between storage classes by using the '
+                                 'gsutil cp -D option.' % error_detail)
+      else:
+        raise
     end_time = time.time()
-    return (end_time - start_time, src_key.size)
+    return (end_time - start_time, src_key.size,
+            dst_uri.clone_replace_key(dst_key))
 
   def _CheckFreeSpace(self, path):
     """Return path/drive free space (in bytes)."""
@@ -703,20 +759,24 @@ class CpCommand(Command):
     Performs resumable upload if supported by provider and file is above
     threshold, else performs non-resumable upload.
 
-    Returns (elapsed_time, bytes_transferred).
+    Returns (elapsed_time, bytes_transferred, version-specific dst_uri).
     """
     start_time = time.time()
-    file_size = os.path.getsize(fp.name)
-    dst_key = dst_uri.new_key(False, headers)
+    # Determine file size different ways for case where fp is actually a wrapper
+    # around a Key vs an actual file.
+    if isinstance(fp, KeyFile):
+      file_size = fp.getkey().size
+    else:
+      file_size = os.path.getsize(fp.name)
     (cb, num_cb, res_upload_handler) = self._GetTransferHandlers(
         dst_uri, file_size, True)
     if dst_uri.scheme == 'gs':
       # Resumable upload protocol is Google Cloud Storage-specific.
-      dst_key.set_contents_from_file(fp, headers, policy=canned_acl,
+      dst_uri.set_contents_from_file(fp, headers, policy=canned_acl,
                                      cb=cb, num_cb=num_cb,
                                      res_upload_handler=res_upload_handler)
     else:
-      dst_key.set_contents_from_file(fp, headers, policy=canned_acl,
+      dst_uri.set_contents_from_file(fp, headers, policy=canned_acl,
                                      cb=cb, num_cb=num_cb)
     if res_upload_handler:
       # ResumableUploadHandler does not update upload_start_point from its
@@ -726,7 +786,7 @@ class CpCommand(Command):
     else:
       bytes_transferred = file_size
     end_time = time.time()
-    return (end_time - start_time, bytes_transferred)
+    return (end_time - start_time, bytes_transferred, dst_uri)
 
   def _PerformStreamingUpload(self, fp, dst_uri, headers, canned_acl=None):
     """
@@ -738,23 +798,23 @@ class CpCommand(Command):
       headers: A copy of the headers dictionary.
       canned_acl: Optional canned ACL to set on the object.
 
-    Returns (elapsed_time, bytes_transferred).
+    Returns (elapsed_time, bytes_transferred, version-specific dst_uri).
     """
     start_time = time.time()
-    dst_key = dst_uri.new_key(False, headers)
 
     if self.quiet:
       cb = None
     else:
       cb = self._StreamCopyCallbackHandler().call
-    dst_key.set_contents_from_stream(fp, headers, policy=canned_acl, cb=cb)
+    dst_uri.set_contents_from_stream(
+        fp, headers, policy=canned_acl, cb=cb)
     try:
       bytes_transferred = fp.tell()
     except:
       bytes_transferred = 0
 
     end_time = time.time()
-    return (end_time - start_time, bytes_transferred)
+    return (end_time - start_time, bytes_transferred, dst_uri)
 
   def _SetContentTypeHeader(self, src_uri, headers):
     """
@@ -797,7 +857,7 @@ class CpCommand(Command):
 
   def _UploadFileToObject(self, src_key, src_uri, dst_uri, headers,
                           should_log=True):
-    """Helper method for uploading a local file to an object.
+    """Uploads a local file to an object.
 
     Args:
       src_key: Source StorageUri. Must be a file URI.
@@ -806,7 +866,8 @@ class CpCommand(Command):
       headers: The headers dictionary.
       should_log: bool indicator whether we should log this operation.
     Returns:
-      (elapsed_time, bytes_transferred) excluding overhead like initial HEAD.
+      (elapsed_time, bytes_transferred, version-specific dst_uri), excluding
+      overhead like initial HEAD.
 
     Raises:
       CommandException: if errors encountered.
@@ -860,7 +921,7 @@ class CpCommand(Command):
       headers['Content-Encoding'] = 'gzip'
       gzip_fp = open(gzip_path, 'rb')
       try:
-        (elapsed_time, bytes_transferred) = (
+        (elapsed_time, bytes_transferred, result_uri) = (
             self._PerformResumableUploadIfApplies(gzip_fp, dst_uri,
                                                   canned_acl, headers))
       finally:
@@ -873,8 +934,9 @@ class CpCommand(Command):
         pass
     elif (src_key.is_stream()
           and dst_uri.get_provider().supports_chunked_transfer()):
-      (elapsed_time, bytes_transferred) = self._PerformStreamingUpload(
-          src_key.fp, dst_uri, headers, canned_acl)
+      (elapsed_time, bytes_transferred, result_uri) = (
+          self._PerformStreamingUpload(src_key.fp, dst_uri, headers,
+                                       canned_acl))
     else:
       if src_key.is_stream():
         # For Providers that doesn't support chunked Transfers
@@ -887,7 +949,7 @@ class CpCommand(Command):
         finally:
           file_uri.close()
       try:
-        (elapsed_time, bytes_transferred) = (
+        (elapsed_time, bytes_transferred, result_uri) = (
             self._PerformResumableUploadIfApplies(src_key.fp, dst_uri,
                                                   canned_acl, headers))
       finally:
@@ -896,10 +958,25 @@ class CpCommand(Command):
         else:
           src_key.close()
 
-    return (elapsed_time, bytes_transferred)
+    return (elapsed_time, bytes_transferred, result_uri)
 
   def _DownloadObjectToFile(self, src_key, src_uri, dst_uri, headers,
                             should_log=True):
+    """Downloads an object to a local file.
+
+    Args:
+      src_key: Source StorageUri. Must be a file URI.
+      src_uri: Source StorageUri.
+      dst_uri: Destination StorageUri.
+      headers: The headers dictionary.
+      should_log: bool indicator whether we should log this operation.
+    Returns:
+      (elapsed_time, bytes_transferred, dst_uri), excluding overhead like
+      initial HEAD.
+
+    Raises:
+      CommandException: if errors encountered.
+    """
     if should_log:
       self._LogCopyOperation(src_uri, dst_uri, headers)
     (cb, num_cb, res_download_handler) = self._GetTransferHandlers(
@@ -933,8 +1010,6 @@ class CpCommand(Command):
       else:
         fp = open(download_file_name, 'wb')
       start_time = time.time()
-      if not self.parse_versions:
-        src_key.generation = None
       src_key.get_contents_to_file(fp, headers, cb=cb, num_cb=num_cb,
                                    res_download_handler=res_download_handler)
       # If a custom test method is defined, call it here. For the copy command,
@@ -979,7 +1054,7 @@ class CpCommand(Command):
         f_out.close()
         f_in.close()
         os.unlink(download_file_name)
-    return (end_time - start_time, bytes_transferred)
+    return (end_time - start_time, bytes_transferred, dst_uri)
 
   def _PerformDownloadToStream(self, src_key, src_uri, str_fp, headers):
     (cb, num_cb, res_download_handler) = self._GetTransferHandlers(
@@ -992,71 +1067,60 @@ class CpCommand(Command):
     return (end_time - start_time, bytes_transferred)
 
   def _CopyFileToFile(self, src_key, src_uri, dst_uri, headers):
+    """Copies a local file to a local file.
+
+    Args:
+      src_key: Source StorageUri. Must be a file URI.
+      src_uri: Source StorageUri.
+      dst_uri: Destination StorageUri.
+      headers: The headers dictionary.
+    Returns:
+      (elapsed_time, bytes_transferred, dst_uri), excluding
+      overhead like initial HEAD.
+
+    Raises:
+      CommandException: if errors encountered.
+    """
     self._LogCopyOperation(src_uri, dst_uri, headers)
     dst_key = dst_uri.new_key(False, headers)
     start_time = time.time()
     dst_key.set_contents_from_file(src_key.fp, headers)
     end_time = time.time()
-    return (end_time - start_time, os.path.getsize(src_key.fp.name))
+    return (end_time - start_time, os.path.getsize(src_key.fp.name), dst_uri)
 
-  def _CopyObjToObjDiffProvider(self, src_key, src_uri, dst_uri, headers):
+  def _CopyObjToObjDaisyChainMode(self, src_key, src_uri, dst_uri, headers):
+    """Copies from src_uri to dst_uri in "daisy chain" mode.
+       See -D OPTION documentation about what daisy chain mode is.
+
+    Args:
+      src_key: Source Key.
+      src_uri: Source StorageUri.
+      dst_uri: Destination StorageUri.
+      headers: A copy of the headers dictionary.
+
+    Returns:
+      (elapsed_time, bytes_transferred, version-specific dst_uri) excluding
+      overhead like initial HEAD.
+
+    Raises:
+      CommandException: if errors encountered.
+    """
     self._SetContentTypeHeader(src_uri, headers)
     self._LogCopyOperation(src_uri, dst_uri, headers)
-    # If destination is GS we can avoid the local copying through a local file
-    # as GS supports chunked transfer. This also allows us to preserve metadata
-    # between original and destination object.
-    if dst_uri.scheme == 'gs':
-      canned_acl = None
-      if self.sub_opts:
-        for o, a in self.sub_opts:
-          if o == '-a':
-            canned_acls = dst_uri.canned_acls()
-            if a not in canned_acls:
-              raise CommandException('Invalid canned ACL "%s".' % a)
-            canned_acl = a
-          elif o == '-p':
-            # We don't attempt to preserve ACLs across providers because
-            # GCS and S3 support different ACLs.
-            raise NotImplementedError('Cross-provider cp -p not supported')
-
-      # TODO: This _PerformStreamingUpload call passes in a Key for fp
-      # param, relying on Python "duck typing" (the fact that the lower-level
-      # methods that expect an fp only happen to call fp methods that are
-      # defined and semantically equivalent to those defined on src_key). This
-      # should be replaced by a class that wraps an fp interface around the
-      # Key, throwing 'not implemented' for methods (like seek) that aren't
-      # implemented by non-file Keys.
-      # NOTE: As of 7/28/2012 this bug now makes cross-provider copies into gs
-      # fail, because of boto changes that make that code now attempt to perform
-      # additional operations on the fp parameter, like seek() and tell().
-      return self._PerformStreamingUpload(KeyFile(src_key), dst_uri, headers, canned_acl)
-
-    # If destination is not GS we implement object copy through a local
-    # temp file. There are at least 3 downsides of this approach:
-    #   1. It doesn't preserve metadata from the src object when uploading to
-    #      the dst object.
-    #   2. It requires enough temp space on the local disk to hold the file
-    #      while transferring.
-    #   3. Killing the gsutil process partway through and then restarting will
-    #      always repeat the download and upload, because the temp file name is
-    #      different for each incarnation. (If however you just leave the
-    #      process running and failures happen along the way, they will
-    #      continue to restart and make progress as long as not too many
-    #      failures happen in a row with no progress.)
-    tmp = tempfile.NamedTemporaryFile()
-    if self._CheckFreeSpace(tempfile.tempdir) < src_key.size:
-      raise CommandException('Inadequate temp space available to perform the '
-                             'requested copy')
-    start_time = time.time()
-    file_uri = self.suri_builder.StorageUri('file://%s' % tmp.name)
-    try:
-      self._DownloadObjectToFile(src_key, src_uri, file_uri, headers, False)
-      self._UploadFileToObject(file_uri.get_key(), file_uri, dst_uri, headers,
-                               False)
-    finally:
-      tmp.close()
-    end_time = time.time()
-    return (end_time - start_time, src_key.size)
+    canned_acl = None
+    if self.sub_opts:
+      for o, a in self.sub_opts:
+        if o == '-a':
+          canned_acls = dst_uri.canned_acls()
+          if a not in canned_acls:
+            raise CommandException('Invalid canned ACL "%s".' % a)
+          canned_acl = a
+        elif o == '-p':
+          # We don't attempt to preserve ACLs across providers because
+          # GCS and S3 support different ACLs and disjoint principals.
+          raise NotImplementedError('Cross-provider cp -p not supported')
+    return self._PerformResumableUploadIfApplies(KeyFile(src_key), dst_uri,
+                                                 canned_acl, headers)
 
   def _PerformCopy(self, src_uri, dst_uri):
     """Performs copy from src_uri to dst_uri, handling various special cases.
@@ -1066,7 +1130,8 @@ class CpCommand(Command):
       dst_uri: Destination StorageUri.
 
     Returns:
-      (elapsed_time, bytes_transferred) excluding overhead like initial HEAD.
+      (elapsed_time, bytes_transferred, version-specific dst_uri) excluding
+      overhead like initial HEAD.
 
     Raises:
       CommandException: if errors encountered.
@@ -1082,6 +1147,12 @@ class CpCommand(Command):
     if not src_key:
       raise CommandException('"%s" does not exist.' % src_uri)
 
+    # On Windows, stdin is opened as text mode instead of binary which causes
+    # problems when piping a binary file, so this switches it to binary mode.
+    if IS_WINDOWS and src_uri.is_file_uri() and src_key.is_stream():
+      import msvcrt
+      msvcrt.setmode(src_key.fp.fileno(), os.O_BINARY)
+
     if self.no_clobber:
         # There are two checks to prevent clobbering:
         # 1) The first check is to see if the item
@@ -1094,23 +1165,22 @@ class CpCommand(Command):
         #    header to prevent a race condition where a destination file may
         #    be created after the first check and before the file is fully
         #    uploaded.
-        # In order to save on unneccesary uploads/downloads we perform both
+        # In order to save on unnecessary uploads/downloads we perform both
         # checks. However, this may come at the cost of additional HTTP calls.
         if dst_uri.exists(headers):
           if not self.quiet:
             self.THREADED_LOGGER.info('Skipping existing item: %s' %
                                       dst_uri.uri)
-          return (0, 0)
+          return (0, 0, None)
         if dst_uri.is_cloud_uri() and dst_uri.scheme == 'gs':
           headers['x-goog-if-generation-match'] = '0'
 
     if src_uri.is_cloud_uri() and dst_uri.is_cloud_uri():
-      if src_uri.scheme == dst_uri.scheme:
-        return self._CopyObjToObjSameProvider(src_key, src_uri, dst_uri,
-                                              headers)
+      if src_uri.scheme == dst_uri.scheme and not self.daisy_chain:
+        return self._CopyObjToObjInTheCloud(src_key, src_uri, dst_uri, headers)
       else:
-        return self._CopyObjToObjDiffProvider(src_key, src_uri, dst_uri,
-                                              headers)
+        return self._CopyObjToObjDaisyChainMode(src_key, src_uri, dst_uri,
+                                                headers)
     elif src_uri.is_file_uri() and dst_uri.is_cloud_uri():
       return self._UploadFileToObject(src_key, src_uri, dst_uri, headers)
     elif src_uri.is_cloud_uri() and dst_uri.is_file_uri():
@@ -1177,7 +1247,7 @@ class CpCommand(Command):
                        have_existing_dest_subdir):
     """
     Constructs the destination URI for a given exp_src_uri/exp_dst_uri pair,
-    using context-dependent naming rules that mimic Unix cp and mv behavior.
+    using context-dependent naming rules that mimic Linux cp and mv behavior.
 
     Args:
       src_uri: src_uri to be copied.
@@ -1217,7 +1287,7 @@ class CpCommand(Command):
 
     if not self.recursion_requested and not have_multiple_srcs:
       # We're copying one file or object to a subdirectory. Append final comp
-      # of exp_src_uri to exp_dest_uri.
+      # of exp_src_uri to exp_dst_uri.
       src_final_comp = exp_src_uri.object_name.rpartition(src_uri.delim)[-1]
       return self.suri_builder.StorageUri('%s%s%s' % (
           exp_dst_uri.uri.rstrip(exp_dst_uri.delim), exp_dst_uri.delim,
@@ -1242,7 +1312,7 @@ class CpCommand(Command):
          '%s%s' % (exp_dst_uri.object_name, exp_dst_uri.delim)
       )
 
-    # Making naming behavior match how things work with local Unix cp and mv
+    # Making naming behavior match how things work with local Linux cp and mv
     # operations depends on many factors, including whether the destination is a
     # container, the plurality of the source(s), and whether the mv command is
     # being used:
@@ -1250,19 +1320,19 @@ class CpCommand(Command):
     #    renaming should occur at the level of the src subdir, vs appending that
     #    subdir beneath the dst subdir like is done for copying. For example:
     #      gsutil rm -R gs://bucket
-    #      gsutil cp -R cloudreader gs://bucket
-    #      gsutil cp -R cloudauth gs://bucket/subdir1
+    #      gsutil cp -R dir1 gs://bucket
+    #      gsutil cp -R dir2 gs://bucket/subdir1
     #      gsutil mv gs://bucket/subdir1 gs://bucket/subdir2
     #    would (if using cp naming behavior) end up with paths like:
-    #      gs://bucket/subdir2/subdir1/cloudauth/.svn/all-wcprops
+    #      gs://bucket/subdir2/subdir1/dir2/.svn/all-wcprops
     #    whereas mv naming behavior should result in:
-    #      gs://bucket/subdir2/cloudauth/.svn/all-wcprops
+    #      gs://bucket/subdir2/dir2/.svn/all-wcprops
     # 2. Copying from directories, buckets, or bucket subdirs should result in
     #    objects/files mirroring the source directory hierarchy. For example:
     #      gsutil cp dir1/dir2 gs://bucket
     #    should create the object gs://bucket/dir2/file2, assuming dir1/dir2
     #    contains file2).
-    #    To be consistent with Unix cp behavior, there's one more wrinkle when
+    #    To be consistent with Linux cp behavior, there's one more wrinkle when
     #    working with subdirs: The resulting object names depend on whether the
     #    destination subdirectory exists. For example, if gs://bucket/subdir
     #    exists, the command:
@@ -1301,13 +1371,13 @@ class CpCommand(Command):
          len(src_uri_path_sans_final_dir):].lstrip(src_uri.delim)
       # Handle case where dst_uri is a non-existent subdir.
       if not have_existing_dest_subdir:
-        dst_key_name = dst_key_name.partition(exp_dst_uri.delim)[-1]
+        dst_key_name = dst_key_name.partition(src_uri.delim)[-1]
       # Handle special case where src_uri was a directory named with '.' or
       # './', so that running a command like:
       #   gsutil cp -r . gs://dest
       # will produce obj names of the form gs://dest/abc instead of
       # gs://dest/./abc.
-      if dst_key_name.startswith('./'):
+      if dst_key_name.startswith('.%s' % os.sep):
         dst_key_name = dst_key_name[2:]
 
     else:
@@ -1322,7 +1392,8 @@ class CpCommand(Command):
             exp_dst_uri.object_name.rstrip(exp_dst_uri.delim),
             exp_dst_uri.delim, dst_key_name)
       else:
-        dst_key_name = '%s%s' % (exp_dst_uri.object_name, dst_key_name)
+        delim = exp_dst_uri.delim if exp_dst_uri.object_name else ''
+        dst_key_name = '%s%s%s' % (exp_dst_uri.object_name, delim, dst_key_name)
 
     return exp_dst_uri.clone_replace_name(dst_key_name)
 
@@ -1362,8 +1433,7 @@ class CpCommand(Command):
       src_uri = self.suri_builder.StorageUri(
           name_expansion_result.GetSrcUriStr())
       exp_src_uri = self.suri_builder.StorageUri(
-          name_expansion_result.GetExpandedUriStr(),
-          parse_version=self.parse_versions)
+          name_expansion_result.GetExpandedUriStr())
       src_uri_names_container = name_expansion_result.NamesContainer()
       src_uri_expands_to_multi = name_expansion_result.NamesContainer()
       have_multiple_srcs = name_expansion_result.IsMultiSrcRequest()
@@ -1380,24 +1450,11 @@ class CpCommand(Command):
                                          cmd_name)
 
       if self.perform_mv:
-        # Disallow files as source arguments to protect users from deleting
-        # data off the local disk. Note that we can't simply set FILE_URIS_OK
-        # to False in command_spec because we *do* allow a file URI for the dest
-        # URI. (We allow users to move data out of the cloud to the local disk,
-        # but we disallow commands that would delete data off the local disk,
-        # and instead require the user to delete data separately, using local
-        # commands/tools.)
-        if src_uri.is_file_uri():
-          raise CommandException('The mv command disallows files as source '
-                                 'arguments.\nDid you mean to use a gs:// URI? '
-                                 'If you meant to use a file as a source, you\n'
-                                 'might consider using the "cp" command '
-                                 'instead.')
         if name_expansion_result.NamesContainer():
           # Use recursion_requested when performing name expansion for the
           # directory mv case so we can determine if any of the source URIs are
           # directories (and then use cp -R and rm -R to perform the move, to
-          # match the behavior of Unix mv (which when moving a directory moves
+          # match the behavior of Linux mv (which when moving a directory moves
           # all the contained files).
           self.recursion_requested = True
           # Disallow wildcard src URIs when moving directories, as supporting it
@@ -1425,21 +1482,34 @@ class CpCommand(Command):
         raise CommandException('%s: "%s" and "%s" are the same file - '
                                'abort.' % (cmd_name, exp_src_uri, dst_uri))
 
+      if dst_uri.is_cloud_uri() and dst_uri.is_version_specific:
+        raise CommandException('%s: a version-specific URI\n(%s)\ncannot be '
+                               'the destination for gsutil cp - abort.'
+                               % (cmd_name, dst_uri))
+
       elapsed_time = bytes_transferred = 0
       try:
-        (elapsed_time, bytes_transferred) = self._PerformCopy(exp_src_uri,
-                                                              dst_uri)
+        (elapsed_time, bytes_transferred, result_uri) = (
+            self._PerformCopy(exp_src_uri, dst_uri))
       except Exception, e:
         if self._IsNoClobberServerException(e):
           if not self.quiet:
             self.THREADED_LOGGER.info('Rejected (noclobber): %s' % dst_uri.uri)
         elif self.continue_on_error:
-            if not self.quiet:
-              self.THREADED_LOGGER.error('Error copying %s: %s' % (src_uri.uri,
-                str(e)))
-            self.copy_failure_count += 1
+          if not self.quiet:
+            self.THREADED_LOGGER.error('Error copying %s: %s' % (src_uri.uri,
+              str(e)))
+          self.copy_failure_count += 1
         else:
           raise
+      if self.print_ver:
+        # Some cases don't return a version-specific URI (e.g., if destination
+        # is a file).
+        if hasattr(result_uri, 'version_specific_uri'):
+          self.THREADED_LOGGER.info('Created: %s' %
+                                    result_uri.version_specific_uri)
+        else:
+          self.THREADED_LOGGER.info('Created: %s' % result_uri.uri)
 
       # TODO: If we ever use -n (noclobber) with -M (move) (not possible today
       # since we call copy internally from move and don't specify the -n flag)
@@ -1504,6 +1574,17 @@ class CpCommand(Command):
     end_time = time.time()
     self.total_elapsed_time = end_time - start_time
 
+    # Sometimes, particularly when running unit tests, the total elapsed time
+    # is really small. On Windows, the timer resolution is too small and
+    # causes total_elapsed_time to be zero.
+    try:
+      float(self.total_bytes_transferred) / float(self.total_elapsed_time)
+    except ZeroDivisionError:
+      self.total_elapsed_time = 0.01
+
+    self.total_bytes_per_second = (float(self.total_bytes_transferred) /
+                                   float(self.total_elapsed_time))
+
     if self.debug == 3:
       # Note that this only counts the actual GET and PUT bytes for the copy
       # - not any transfers for doing wildcard expansion, the initial HEAD
@@ -1512,8 +1593,7 @@ class CpCommand(Command):
         self.THREADED_LOGGER.info(
             'Total bytes copied=%d, total elapsed time=%5.3f secs (%sps)',
                 self.total_bytes_transferred, self.total_elapsed_time,
-                MakeHumanReadable(float(self.total_bytes_transferred) /
-                                  float(self.total_elapsed_time)))
+                MakeHumanReadable(self.total_bytes_per_second))
     if self.copy_failure_count:
       plural_str = ''
       if self.copy_failure_count > 1:
@@ -1523,135 +1603,23 @@ class CpCommand(Command):
 
     return 0
 
-  # Test specification. See definition of test_steps in base class for
-  # details on how to populate these fields.
-  num_test_buckets = 3
-  test_steps = [
-    # (test name, cmd line, ret code, (result_file, expect_file))
-    #
-    # Testing of no-clobber behavior.
-    ('upload', 'gsutil cp $F1 gs://$B1/$O1', 0, None),
-    ('setup noclobber', 'echo Skipping >noclob.ct', 0, None),
-    ('download', 'gsutil cp gs://$B1/$O1 $F9', 0, ('$F9', '$F1')),
-    ('noclobber upload',
-      'gsutil cp -n $F1 gs://$B1/$O1 2>&1 >/dev/null | cut -c1-8 >noclob.ct1',
-      0, ('noclob.ct', 'noclob.ct1')),
-    ('noclobber download',
-      'gsutil cp -n gs://$B1/$O1 $F9 2>&1 >/dev/null | cut -c1-8 >noclob.ct2',
-      0, ('noclob.ct', 'noclob.ct2')),
-    #
-    # Testing of copy-in-the-cloud:
-    ('noclobber setup copy-in-the-cloud',
-      'gsutil cp gs://$B1/$O1 gs://$B2', 0, None),
-    ('noclobber verify copy-in-the-cloud',
-      'gsutil cp -n gs://$B1/$O1 gs://$B2 2>&1 '
-      '>/dev/null | cut -c1-8 > noclob.ct3', 0, ('noclob.ct', 'noclob.ct3')),
-    ('stream upload', 'cat $F1 | gsutil cp - gs://$B1/$O1', 0, None),
-    ('check stream upload', 'gsutil cp gs://$B1/$O1 $F9', 0, ('$F9', '$F1')),
-    # Clean up if we got interrupted.
-    ('remove test files',
-     'rm -f test.mp3 test_mp3.ct test.gif test_gif.ct test.foo noclob.ct*',
-      0, None),
-    #
-    # Testing of Content-Type detection:
-    ('setup mp3 file', 'cp $G/gslib/test_data/test.mp3 test.mp3', 0, None),
-    ('setup mp3 CT', 'echo audio/mpeg >test_mp3.ct', 0, None),
-    ('setup gif file', 'cp $G/gslib/test_data/test.gif test.gif', 0, None),
-    ('setup gif CT', 'echo image/gif >test_gif.ct', 0, None),
-    # TODO: we don't need test.app and test.bin anymore if
-    # USE_MAGICFILE=True. Implement a way to test both with and without using
-    # magic file.
-    #('setup app file', 'echo application/octet-stream >test.app', 0, None),
-    ('setup foo file', 'echo foo/bar >test.foo', 0, None),
-    ('upload mp3', 'gsutil cp test.mp3 gs://$B1/$O1', 0, None),
-    ('verify mp3',
-     'gsutil ls -L gs://$B1/$O1 | grep Content-Type | cut -f3 >$F1',
-     0, ('$F1', 'test_mp3.ct')),
-    ('upload gif', 'gsutil cp test.gif gs://$B1/$O1', 0, None),
-    ('verify gif',
-     'gsutil ls -L gs://$B1/$O1 | grep Content-Type | cut -f3 >$F1',
-     0, ('$F1', 'test_gif.ct')),
-    # TODO: The commented-out /noCT test below fails with USE_MAGICFILE=True.
-    ('upload mp3/noCT',
-     'gsutil -h "Content-Type:" cp test.mp3 gs://$B1/$O1', 0, None),
-    ('verify mp3/noCT',
-     'gsutil ls -L gs://$B1/$O1 | grep Content-Type | cut -f3 >$F1',
-     0, ('$F1', 'test_mp3.ct')),
-    ('upload gif/noCT',
-     'gsutil -h "Content-Type:" cp test.gif gs://$B1/$O1', 0, None),
-    ('verify gif/noCT',
-     'gsutil ls -L gs://$B1/$O1 | grep Content-Type | cut -f3 >$F1',
-     0, ('$F1', 'test_gif.ct')),
-    #('upload foo/noCT', 'gsutil -h "Content-Type:" cp test.foo gs://$B1/$O1',
-    # 0, None),
-    #('verify foo/noCT',
-    # 'gsutil ls -L gs://$B1/$O1 | grep Content-Type | cut -f3 >$F1',
-    # 0, ('$F1', 'test_bin.ct')),
-    ('upload mp3/-h gif',
-     'gsutil -h "Content-Type:image/gif" cp test.mp3 gs://$B1/$O1', 0, None),
-    ('verify mp3/-h gif',
-     'gsutil ls -L gs://$B1/$O1 | grep Content-Type | cut -f3 >$F1',
-     0, ('$F1', 'test_gif.ct')),
-    ('upload gif/-h gif',
-     'gsutil -h "Content-Type:image/gif" cp test.gif gs://$B1/$O1', 0, None),
-    ('verify gif/-h gif',
-     'gsutil ls -L gs://$B1/$O1 | grep Content-Type | cut -f3 >$F1',
-     0, ('$F1', 'test_gif.ct')),
-    ('upload foo/-h gif',
-     'gsutil -h "Content-Type: image/gif" cp test.foo gs://$B1/$O1', 0, None),
-    ('verify foo/-h gif',
-     'gsutil ls -L gs://$B1/$O1 | grep Content-Type | cut -f3 >$F1',
-     0, ('$F1', 'test_gif.ct')),
-    ('remove test files',
-     'rm -f test.mp3 test_mp3.ct test.gif test_gif.ct test.foo', 0, None),
-    #
-    # Testing of versioning:
-    # To make the following tests simpler to understand, we note that bucket $B2
-    # is unused before this point.
-    ('enable versioning', 'gsutil setversioning on gs://$B2', 0, None),
-    ('upload new version', 'echo \'data1\' | gsutil cp - gs://$B2/$O3', 0,
-     None),
-    ('cloud cp new version', 'gsutil cp gs://$B2/$O0 gs://$B2/$O3', 0, None),
-    ('upload new version', 'echo \'data2\' | gsutil cp - gs://$B2/$O3', 0,
-     None),
-    ('get first generation name', 'gsutil ls -a gs://$B2/$O3 | head -n 1 > $F9',
-     0, None),
-    ('setup data1 file', 'echo \'data1\' > $F1', 0, None),
-    ('setup data2 file', 'echo \'data2\' > $F2', 0, None),
-    ('download current version', 'gsutil cp gs://$B2/$O3 $F3', 0,
-     ('$F3', '$F2')),
-    ('download first version', 'gsutil cp -v `cat $F9` $F3', 0,
-     ('$F3', '$F1')),
-    ('cp first verion to current', 'gsutil cp -v `cat $F9` gs://$B2/$O3', 0,
-     None),
-    ('download current version', 'gsutil cp gs://$B2/$O3 $F3', 0,
-     ('$F3', '$F1')),
-    ('remove versioning test files', 'rm -f $F3 $F9', 0, None),
-    #
-    # Testing of taking args from stdin:
-    ('remove bucket B2 contents', 'gsutil -m rm -r gs://$B2', 0, None),
-    ('setup inputlist file, pt1', 'echo $F1 > $F3', 0, None),
-    ('setup inputlist file, pt1', 'echo $F2 >> $F3', 0, None),
-    ('setup expected ls output, pt1', 'echo gs://$B2/$F1 > $F4', 0, None),
-    ('setup expected ls output, pt2', 'echo gs://$B2/$F2 >> $F4', 0, None),
-    ('perform inputlist copy', 'gsutil cp -I gs://$B2 < $F3', 0, None),
-    ('verify inputlist copy', 'gsutil ls gs://$B2 > $F5', 0,
-      ('$F5', '$F4')),
-  ]
-
   def _ParseArgs(self):
     self.perform_mv = False
     self.exclude_symlinks = False
     self.quiet = False
     self.no_clobber = False
     self.continue_on_error = False
+    self.daisy_chain = False
     self.read_args_from_stdin = False
+    self.print_ver = False
     # self.recursion_requested initialized in command.py (so can be checked
     # in parent class for all commands).
     if self.sub_opts:
       for o, unused_a in self.sub_opts:
         if o == '-c':
           self.continue_on_error = True
+        elif o == '-D':
+          self.daisy_chain = True
         elif o == '-e':
           self.exclude_symlinks = True
         elif o == '-I':
@@ -1669,7 +1637,7 @@ class CpCommand(Command):
         elif o == '-r' or o == '-R':
           self.recursion_requested = True
         elif o == '-v':
-          self.parse_versions = True
+          self.print_ver = True
 
   def _HandleStreamingDownload(self):
     # Destination is <STDOUT>. Manipulate sys.stdout so as to redirect all
@@ -1679,9 +1647,6 @@ class CpCommand(Command):
     did_some_work = False
     for uri_str in self.args[0:len(self.args)-1]:
       for uri in self.WildcardIterator(uri_str).IterUris():
-        if not uri.names_object():
-          raise CommandException('Destination Stream requires that '
-                                 'source URI %s should represent an object!')
         did_some_work = True
         key = uri.get_key(False, self.headers)
         (elapsed_time, bytes_transferred) = self._PerformDownloadToStream(
@@ -1697,6 +1662,7 @@ class CpCommand(Command):
                 self.total_bytes_transferred, self.total_elapsed_time,
                  MakeHumanReadable(float(self.total_bytes_transferred) /
                                    float(self.total_elapsed_time)))
+
   def _StdinIterator(self):
     """A generator function that returns lines from stdin."""
     for line in sys.stdin:
@@ -1717,12 +1683,8 @@ class CpCommand(Command):
     """
     if src_uri.is_file_uri() and dst_uri.is_file_uri():
       # Translate a/b/./c to a/b/c, so src=dst comparison below works.
-      new_src_path = re.sub('%s+\.%s+' % (os.sep, os.sep), os.sep,
-                            src_uri.object_name)
-      new_src_path = re.sub('^.%s+' % os.sep, '', new_src_path)
-      new_dst_path = re.sub('%s+\.%s+' % (os.sep, os.sep), os.sep,
-                            dst_uri.object_name)
-      new_dst_path = re.sub('^.%s+' % os.sep, '', new_dst_path)
+      new_src_path = os.path.normpath(src_uri.object_name)
+      new_dst_path = os.path.normpath(dst_uri.object_name)
       return (src_uri.clone_replace_name(new_src_path).uri ==
               dst_uri.clone_replace_name(new_dst_path).uri)
     else:
@@ -1851,6 +1813,7 @@ def _hash_filename(filename):
   Returns:
     shorter, hashed version of passed file name
   """
-  m = hashlib.sha1(filename.encode('utf-8'))
-  hashed_name = ("TRACKER_" + m.hexdigest() + '.' + filename[-16:])
-  return hashed_name
+  if not isinstance(filename, unicode):
+    filename = unicode(filename, 'utf8').encode('utf-8')
+  m = hashlib.sha1(filename)
+  return "TRACKER_" + m.hexdigest() + '.' + filename[-16:]

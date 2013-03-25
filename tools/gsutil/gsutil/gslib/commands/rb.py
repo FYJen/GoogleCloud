@@ -1,4 +1,4 @@
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from boto.exception import GSResponseError
 from gslib.command import Command
 from gslib.command import COMMAND_NAME
 from gslib.command import COMMAND_NAME_ALIASES
@@ -95,7 +96,16 @@ class RbCommand(Command):
           raise CommandException('"rb" command requires a URI with no object '
                                  'name')
         print 'Removing %s...' % uri
-        uri.delete_bucket(self.headers)
+        try:
+          uri.delete_bucket(self.headers)
+        except GSResponseError as e:
+          if e.code == 'BucketNotEmpty' and uri.get_versioning_config():
+            raise CommandException('Bucket is not empty. Note: this is a '
+                                   'versioned bucket, so to delete all objects'
+                                   '\nyou need to use:\n\tgsutil rm -ra %s'
+                                   % uri)
+          else:
+            raise
         did_some_work = True
     if not did_some_work:
       raise CommandException('No URIs matched')

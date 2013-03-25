@@ -1,4 +1,4 @@
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,11 +48,13 @@ class ProjectIdHandler(object):
 
     # We only include the project ID header if it's a GS URI and a project_id
     # was specified and
-    # (it's an 'mb', 'disablelogging, or 'enablelogging' command
+    # (it's an 'mb', 'disablelogging, or 'enablelogging' command or
+    #  a boto request in integration tests or
     #  (an 'ls' command that doesn't specify a bucket or wildcarded bucket)).
     if (uri.scheme.lower() == 'gs' and self.project_id
         and (command == 'mb' or command == 'disablelogging'
              or command == 'enablelogging'
+             or command == 'test'
              or (command == 'ls' and not uri.names_bucket())
              or (command == WILDCARD_BUCKET_ITERATOR))):
       # Note: check for None (as opposed to "not headers") here because

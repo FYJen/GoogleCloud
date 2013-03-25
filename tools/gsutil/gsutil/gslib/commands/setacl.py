@@ -1,4 +1,4 @@
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -72,19 +72,16 @@ _detailed_help_text = ("""
   refer to objects. gsutil -m setacl gs://bucket1 gs://bucket2 will run the
   setacl operations sequentially.
 
+  One other note: If you want to change a set of ACLs by adding and removing
+  grants, without the need to manually retrieve and edit the XML representation,
+  you can do that with the chacl command (see 'gsutil help chacl').
+
 
 <B>OPTIONS</B>
   -R, -r      Performs setacl request recursively, to all objects under the
               specified URI.
 
-  -a          Performs setacl request on all versions / generations.
-
-  -v          Parses uris for version / generation numbers (only applicable in 
-              version-enabled buckets). For example:
-
-                gsutil setacl -v public-read gs://bucket/object#1348772910166013
-
-              Note that wildcards are not permitted while using this flag.
+  -a          Performs setacl request on all object versions.
 """)
 
 
@@ -134,6 +131,8 @@ class SetAclCommand(Command):
         elif o == '-r' or o == '-R':
           self.recursion_requested = True
         elif o == '-v':
-          self.parse_versions = True
+          self.THREADED_LOGGER.info('WARNING: The %s -v option is no longer'
+                                    ' needed, and will eventually be removed.\n'
+                                    % self.command_name)
     self.SetAclCommandHelper()
     return 0

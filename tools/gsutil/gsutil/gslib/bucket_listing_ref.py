@@ -1,4 +1,4 @@
-# Copyright 2012 Google Inc.
+# Copyright 2012 Google Inc. All Rights Reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the
@@ -53,8 +53,6 @@ class BucketListingRef(object):
 
       At most one of key and prefix can be populated.
     """
-    assert uri is not None
-    # At most one of key or prefix may be specified.
     assert key is None or prefix is None
     self.uri = uri
     self.key = key
@@ -85,13 +83,23 @@ class BucketListingRef(object):
     """
     return self.key is None and self.prefix is None and self.uri.names_bucket()
 
+  def IsLatest(self):
+    """Determines if this BucketListingRef names the latest version of an
+    object.
+
+    Returns:
+      bool indicator.
+    """
+    return hasattr(self.uri, 'is_latest') and self.uri.is_latest
+
   def GetRStrippedUriString(self):
-    """Get string URI form of listed URI, stripped of any right trailing delims.
+    """Get string URI form of listed URI, stripped of any right trailing
+    delims, and without version string.
 
     Returns:
       String.
     """
-    return self.GetUriString().rstrip('/')
+    return self.uri.versionless_uri.rstrip('/')
 
   def HasKey(self):
     """Return bool indicator of whether this BucketListingRef has a Key."""

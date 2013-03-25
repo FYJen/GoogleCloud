@@ -1,4 +1,4 @@
-# Copyright 2012 Google Inc.
+# Copyright 2012 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,9 +28,6 @@ _detailed_help_text = ("""
 
   will copy all objects that start with gs://bucket/data/abc followed by any
   number of characters within that subdirectory.
-
-  Note: Wildcards are disallowed when using the "-v" flag to specify an object
-  version.
 
 
 <B>DIRECTORY BY DIRECTORY VS RECURSIVE WILDCARDS</B>

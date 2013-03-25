@@ -1,4 +1,4 @@
-# Copyright 2012 Google Inc.
+# Copyright 2012 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import sys
+import xml
 
 from gslib.command import Command
 from gslib.command import COMMAND_NAME
@@ -29,7 +32,6 @@ from gslib.help_provider import HELP_ONE_LINE_SUMMARY
 from gslib.help_provider import HELP_TEXT
 from gslib.help_provider import HelpType
 from gslib.help_provider import HELP_TYPE
-import xml
 
 _detailed_help_text = ("""
 <B>SYNOPSIS</B>
@@ -115,5 +117,5 @@ class GetCorsCommand(Command):
     cors = uri.get_cors(False, self.headers)
     # Pretty-print the XML to make it more easily human editable.
     parsed_xml = xml.dom.minidom.parseString(cors.to_xml().encode('utf-8'))
-    print parsed_xml.toprettyxml(indent='    ')
+    sys.stdout.write(parsed_xml.toprettyxml(indent='    '))
     return 0

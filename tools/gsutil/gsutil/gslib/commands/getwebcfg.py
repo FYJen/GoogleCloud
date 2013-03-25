@@ -1,4 +1,4 @@
-# Copyright 2012 Google Inc.
+# Copyright 2012 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import sys
 
 from gslib.command import Command
 from gslib.command import COMMAND_NAME
@@ -44,7 +46,7 @@ _detailed_help_text = ("""
   "directories". Also, you can define a custom error page in case a requested
   resource does not exist.
 
-  The gstuil getwebcfg command gets the web semantics configuration for a
+  The gsutil getwebcfg command gets the web semantics configuration for a
   bucket, and displays an XML representation of the configuration.
 
   In Google Cloud Storage, this would look like:
@@ -111,9 +113,9 @@ class GetWebcfgCommand(Command):
           raise CommandException('URI %s must name a bucket for the %s command'
                                  % (str(uri), self.command_name))
         some_matched = True
-        print 'Getting website config on %s...' % uri
+        sys.stderr.write('Getting website config on %s...\n' % uri)
         _, xml_body = uri.get_website_config()
-        print XmlParseString(xml_body).toprettyxml()
+        sys.stdout.write(XmlParseString(xml_body).toprettyxml())
     if not some_matched:
       raise CommandException('No URIs matched')
 

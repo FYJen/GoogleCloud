@@ -1,4 +1,4 @@
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,11 +28,11 @@ import gslib
 import logging
 import multiprocessing
 import os
+import platform
 import re
 import sys
 import wildcard_iterator
 import xml.dom.minidom
-import xml.sax.xmlreader
 
 from boto import handler
 from boto.storage_uri import StorageUri
@@ -209,7 +209,6 @@ class Command(object):
     self.exclude_symlinks = False
     self.recursion_requested = False
     self.all_versions = False
-    self.parse_versions = False
 
     # Process sub-command instance specifications.
     # First, ensure subclass implementation sets all required keys.
@@ -256,6 +255,19 @@ class Command(object):
 
     self.proj_id_handler = ProjectIdHandler()
     self.suri_builder = StorageUriBuilder(debug, bucket_storage_uri_class)
+
+    # Cross-platform path to run gsutil binary.
+    self.gsutil_cmd = ''
+    # Cross-platform list containing gsutil path for use with subprocess.
+    self.gsutil_exec_list = []
+    # If running on Windows, invoke python interpreter explicitly.
+    if platform.system() == "Windows":
+      self.gsutil_cmd += 'python '
+      self.gsutil_exec_list += ['python']
+    # Add full path to gsutil to make sure we test the correct version.
+    self.gsutil_path = os.path.join(self.gsutil_bin_dir, 'gsutil')
+    self.gsutil_cmd += self.gsutil_path
+    self.gsutil_exec_list += [self.gsutil_path]
 
     # We're treating recursion_requested like it's used by all commands, but
     # only some of the commands accept the -R option.
@@ -311,25 +323,14 @@ class Command(object):
         return None
     return uri
 
-  def _CheckNoWildcardsForVersions(self, uri_args):
-    for uri_str in uri_args:
-      if ContainsWildcard(uri_str):
-        # It's exceedingly unlikely that specifying a generation and wildcarding
-        # an object name will match multiple objects, so we explicitly disallow
-        # this behavior. Wildcarding generation numbers is slightly more useful,
-        # but probably still a remote use-case.
-        raise CommandException('Wildcard-ful URI (%s) disallowed with -v flag.'
-                               % uri_str)
-
   def SetAclCommandHelper(self):
     """
     Common logic for setting ACLs. Sets the standard ACL or the default
     object ACL depending on self.command_name.
     """
+
     acl_arg = self.args[0]
     uri_args = self.args[1:]
-    if self.parse_versions:
-      self._CheckNoWildcardsForVersions(uri_args)
     # Disallow multi-provider setacl requests, because there are differences in
     # the ACL models.
     storage_uri = self.UrisAreForSingleProvider(uri_args)
@@ -337,40 +338,25 @@ class Command(object):
       raise CommandException('"%s" command spanning providers not allowed.' %
                              self.command_name)
 
-    # Get ACL object from connection for one URI, for interpreting the ACL.
-    # This won't fail because the main startup code insists on at least 1 arg
-    # for this command.
-    acl_class = storage_uri.acl_class()
-    canned_acls = storage_uri.canned_acls()
-
     # Determine whether acl_arg names a file containing XML ACL text vs. the
     # string name of a canned ACL.
     if os.path.isfile(acl_arg):
       acl_file = open(acl_arg, 'r')
-      acl_txt = acl_file.read()
+      acl_arg = acl_file.read()
+      
+      # TODO: Remove this workaround when GCS allows
+      # whitespace in the Permission element on the server-side 
+      acl_arg = re.sub(r'<Permission>\s*(\S+)\s*</Permission>',
+                       r'<Permission>\1</Permission>', acl_arg)
+
       acl_file.close()
-      acl_obj = acl_class()
-      # Handle wildcard-named bucket.
-      if ContainsWildcard(storage_uri.bucket_name):
-        try:
-          bucket_uri = self.WildcardIterator(
-              storage_uri.clone_replace_name('')).IterUris().next()
-        except StopIteration:
-          raise CommandException('No URIs matched')
-      else:
-        bucket_uri = storage_uri
-      h = handler.XmlHandler(acl_obj, bucket_uri.get_bucket())
-      try:
-        xml.sax.parseString(acl_txt, h)
-      except xml.sax._exceptions.SAXParseException, e:
-        raise CommandException('Requested ACL is invalid: %s at line %s, '
-                               'column %s' % (e.getMessage(), e.getLineNumber(),
-                                              e.getColumnNumber()))
-      acl_arg = acl_obj
+      self.canned = False
     else:
       # No file exists, so expect a canned ACL string.
+      canned_acls = storage_uri.canned_acls()
       if acl_arg not in canned_acls:
         raise CommandException('Invalid canned ACL "%s".' % acl_arg)
+      self.canned = True
 
     # Used to track if any ACLs failed to be set.
     self.everything_set_okay = True
@@ -381,16 +367,18 @@ class Command(object):
       self.everything_set_okay = False
 
     def _SetAclFunc(name_expansion_result):
-      parse_version = self.parse_versions or self.all_versions
       exp_src_uri = self.suri_builder.StorageUri(
-          name_expansion_result.GetExpandedUriStr(),
-          parse_version=parse_version)
+          name_expansion_result.GetExpandedUriStr())
       # We don't do bucket operations multi-threaded (see comment below).
       assert self.command_name != 'setdefacl'
       self.THREADED_LOGGER.info('Setting ACL on %s...' %
                                 name_expansion_result.expanded_uri_str)
-      exp_src_uri.set_acl(acl_arg, exp_src_uri.object_name, False,
-                          self.headers)
+      if self.canned:
+        exp_src_uri.set_acl(acl_arg, exp_src_uri.object_name, False,
+                            self.headers)
+      else:
+        exp_src_uri.set_xml_acl(acl_arg, exp_src_uri.object_name, False,
+                                self.headers)
 
     # If user specified -R option, convert any bucket args to bucket wildcards
     # (e.g., gs://bucket/*), to prevent the operation from being  applied to
@@ -434,29 +422,29 @@ class Command(object):
         uri = blr.GetUri()
         if self.command_name == 'setdefacl':
           print 'Setting default object ACL on %s...' % uri
-          uri.set_def_acl(acl_arg, uri.object_name, False, self.headers)
+          if self.canned:
+            uri.set_def_acl(acl_arg, uri.object_name, False, self.headers)
+          else:
+            uri.set_def_xml_acl(acl_arg, False, self.headers)
         else:
           print 'Setting ACL on %s...' % uri
-          uri.set_acl(acl_arg, uri.object_name, False, self.headers)
+          if self.canned:
+            uri.set_acl(acl_arg, uri.object_name, False, self.headers)
+          else:
+            uri.set_xml_acl(acl_arg, uri.object_name, False, self.headers)
     if not some_matched:
       raise CommandException('No URIs matched')
 
   def GetAclCommandHelper(self):
     """Common logic for getting ACLs. Gets the standard ACL or the default
     object ACL depending on self.command_name."""
-    parse_versions = False
-    if self.sub_opts:
-      for o, a in self.sub_opts:
-        if o == '-v':
-          parse_versions = True
 
-    if parse_versions:
-      uri_str = self.args[0]
-      if ContainsWildcard(uri_str):
-        raise CommandException('Wildcards disallowed with -v flag.')
-      uri = self.suri_builder.StorageUri(uri_str, parse_version=True)
+    # Resolve to just one object.
+    # Handle wildcard-less URI specially in case this is a version-specific
+    # URI, because WildcardIterator().IterUris() would lose the versioning info.
+    if not ContainsWildcard(self.args[0]):
+      uri = self.suri_builder.StorageUri(self.args[0])
     else:
-      # Wildcarding is allowed but must resolve to just one object.
       uris = list(self.WildcardIterator(self.args[0]).IterUris())
       if len(uris) == 0:
         raise CommandException('No URIs matched')
@@ -513,6 +501,7 @@ class Command(object):
     Raises:
       CommandException if invalid config encountered.
     """
+
     # Set OS process and python thread count as a function of options
     # and config.
     if self.parallel_operations:
@@ -566,31 +555,49 @@ class Command(object):
                                           shared_vars))
         procs.append(p)
         p.start()
-      # Feed all work into the queue being emptied by the workers.
-      for name_expansion_result in name_expansion_iterator:
-        work_queue.put(name_expansion_result)
-      # Send an EOF per worker.
-      for shard in range(process_count):
-        work_queue.put(_EOF_NAME_EXPANSION_RESULT)
 
-      # Wait for all spawned OS processes to finish.
-      failed_process_count = 0
-      for p in procs:
-        p.join()
-        # Count number of procs that returned non-zero exit code.
-        if p.exitcode != 0:
-          failed_process_count += 1
-      # Abort main process if one or more sub-processes failed.
+      last_name_expansion_result = None
+      try:
+        # Feed all work into the queue being emptied by the workers.
+        for name_expansion_result in name_expansion_iterator:
+          last_name_expansion_result = name_expansion_result
+          work_queue.put(name_expansion_result)
+      except:
+        sys.stderr.write('Failed URI iteration. Last result (prior to '
+                         'exception) was: %s\n'
+                         % repr(last_name_expansion_result))
+      finally:
+        # We do all of the process cleanup in a finally cause in case the name
+        # expansion iterator throws an exception. This will send EOF to all the
+        # child processes and join them back into the parent process.
+
+        # Send an EOF per worker.
+        for shard in range(process_count):
+          work_queue.put(_EOF_NAME_EXPANSION_RESULT)
+
+        # Wait for all spawned OS processes to finish.
+        failed_process_count = 0
+        for p in procs:
+          p.join()
+          # Count number of procs that returned non-zero exit code.
+          if p.exitcode != 0:
+            failed_process_count += 1
+
+        # Propagate shared variables back to caller's attributes.
+        if shared_vars:
+          for (name, var) in shared_vars.items():
+            setattr(self, name, var.value)
+
+      # Abort main process if one or more sub-processes failed. Note that this
+      # is outside the finally clause, because we only want to raise a new
+      # exception if an exception wasn't already raised in the try clause above.
       if failed_process_count:
         plural_str = ''
         if failed_process_count > 1:
           plural_str = 'es'
         raise Exception('unexpected failure in %d sub-process%s, '
                         'aborting...' % (failed_process_count, plural_str))
-      # Propagate shared variables back to caller's attributes.
-      if shared_vars:
-        for (name, var) in shared_vars.items():
-          setattr(self, name, var.value)
+
     else:
       # Using just 1 process, so funnel results to _ApplyThreads using facade
       # that makes NameExpansionIterator look like a Multiprocessing.Queue
@@ -689,7 +696,7 @@ class Command(object):
       while True: # Loop until we hit EOF marker.
         name_expansion_result = work_queue.get()
         if name_expansion_result == _EOF_NAME_EXPANSION_RESULT:
-          break;
+          break
         exp_src_uri = self.suri_builder.StorageUri(
             name_expansion_result.GetExpandedUriStr())
         if self.debug:

@@ -1,4 +1,4 @@
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ _detailed_help_text = ("""
   time_taken_micros   integer  The time it took to serve the request in
                                microseconds.
   cs_host             string   The host in the original request.
-  cs_referer          string   The HTTP referrer for the request.
+  cs_referrer         string   The HTTP referrer for the request.
   cs_user_agent       string   The User-Agent of the request.
   s_request_id        string   The request identifier.
   cs_operation        string   The Google Cloud Storage operation e.g.

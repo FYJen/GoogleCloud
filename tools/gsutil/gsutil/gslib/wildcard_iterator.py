@@ -1,4 +1,4 @@
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the
@@ -215,13 +215,20 @@ class CloudWildcardIterator(WildcardIterator):
                         + suffix_wildcard))
                 else:
                   # Done expanding.
-                  expanded_uri = uri.clone_replace_name(key.name)
+                  expanded_uri = uri.clone_replace_key(key)
+
                   if isinstance(key, Prefix):
                     yield BucketListingRef(expanded_uri, key=None, prefix=key,
                                            headers=self.headers)
                   else:
-                    yield BucketListingRef(expanded_uri, key=key, prefix=None,
-                                           headers=self.headers)
+                    if self.all_versions:
+                      yield BucketListingRef(expanded_uri, key=key, prefix=None,
+                                             headers=self.headers)
+                    else:
+                      # Yield BLR wrapping version-less URI.
+                      yield BucketListingRef(expanded_uri.clone_replace_name(
+                          expanded_uri.object_name), key=key, prefix=None,
+                          headers=self.headers)
 
   def _BuildBucketFilterStrings(self, wildcard):
     """
@@ -385,7 +392,7 @@ class FileWildcardIterator(WildcardIterator):
       if not remaining_wildcard:
         remaining_wildcard = '*'
       # Skip slash(es).
-      remaining_wildcard = remaining_wildcard.lstrip('/')
+      remaining_wildcard = remaining_wildcard.lstrip(os.sep)
       filepaths = []
       for dirpath, unused_dirnames, filenames in os.walk(base_dir):
         filepaths.extend(
@@ -454,8 +461,8 @@ def wildcard_iterator(uri_or_str, proj_id_handler,
   """
 
   if isinstance(uri_or_str, basestring):
-    # Disable enforce_bucket_naming, to allow bucket names containing
-    # wildcard chars.
+    # Disable enforce_bucket_naming, to allow bucket names containing wildcard
+    # chars.
     uri = boto.storage_uri(
         uri_or_str, debug=debug, validate=False,
         bucket_storage_uri_class=bucket_storage_uri_class,

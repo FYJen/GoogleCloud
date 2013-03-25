@@ -1,4 +1,4 @@
-# Copyright 2011 Google Inc.
+# Copyright 2011 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,10 +46,10 @@ _detailed_help_text = ("""
 
     gsutil mv gs://my_bucket dir
 
-  The mv command, like the rm command, will refuse to remove data from
-  the local disk. Thus, for example, this command will not be allowed:
+  Similarly, to move all objects from a local directory to a bucket you could
+  use:
 
-    gsutil mv *.txt gs://my_bucket
+    gsutil mv ./dir gs://my_bucket
 
 
 <B>RENAMING BUCKET SUBDIRECTORIES</B>
@@ -133,19 +133,20 @@ class MvCommand(Command):
 
   # Command entry point.
   def RunCommand(self):
-    # Check each source arg up, refusing to delete a bucket or directory src
-    # URI (force users to explicitly do that as a separate operation).
+    # Check each source arg up, refusing to delete a bucket src URI (force users
+    # to explicitly do that as a separate operation).
     for arg_to_check in self.args[0:-1]:
-      if self.suri_builder.StorageUri(arg_to_check).names_container():
-        raise CommandException('The mv command disallows removing source '
-                               'buckets or directories (%s).\nYou must '
-                               'separately copy and remove if you wish to do '
-                               'that.' % arg_to_check)
+      if self.suri_builder.StorageUri(arg_to_check).names_bucket():
+        raise CommandException('You cannot move a source bucket using the mv '
+                               'command. If you meant to move\nall objects in '
+                               'the bucket, you can use a command like:\n'
+                               '\tgsutil mv %s/* %s' %
+                               (arg_to_check, self.args[-1]))
 
     # Insert command-line opts in front of args so they'll be picked up by cp
     # and rm commands (e.g., for -p option). Use undocumented (internal
     # use-only) cp -M option, which causes each original object to be deleted
-    # after sucessfully copying to its destination, and also causes naming
+    # after successfully copying to its destination, and also causes naming
     # behavior consistent with Unix mv naming behavior (see comments in
     # _ConstructDstUri in cp.py).
     unparsed_args = ['-M']
@@ -156,22 +157,3 @@ class MvCommand(Command):
                                         self.debug, self.parallel_operations)
 
     return 0
-
-  # Test specification. See definition of test_steps in base class for
-  # details on how to populate these fields.
-  num_test_buckets = 3
-  test_steps = [
-    # (test name, cmd line, ret code, (result_file, expect_file))
-    ('gen expect files', 'echo 0 >$F0; echo 1 >$F1; echo 2 >$F2', 0, None),
-    ('verify 2 src objs', 'gsutil ls gs://$B2 | wc -l >$F9', 0, ('$F9', '$F2')),
-    ('verify 0 dst objs', 'gsutil ls gs://$B0 | wc -l >$F9', 0, ('$F9', '$F0')),
-    ('mv 2 objects',
-       'gsutil -m mv gs://$B2/$O0 gs://$B2/$O1 gs://$B0 2>&1 | grep Removing',
-       0, None),
-    ('verify 0 src objs', 'gsutil ls gs://$B2 | wc -l >$F9', 0, ('$F9', '$F0')),
-    ('verify 2 dst objs', 'gsutil ls gs://$B0 | wc -l >$F9', 0, ('$F9', '$F2')),
-    ('rm 1 src object', 'gsutil rm gs://$B0/$O0', 0, None),
-    ('verify 1 src obj', 'gsutil ls gs://$B0 | wc -l >$F9', 0, ('$F9', '$F1')),
-    ('verify 0 dst objs', 'gsutil ls gs://$B2 | wc -l >$F9', 0, ('$F9', '$F0')),
-    ('mv 2 objects', 'gsutil -m mv gs://$B0/$O0 gs://$B0/$O1 gs://$B2', 1, None),
-  ]
