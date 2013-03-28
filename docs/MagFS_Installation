@@ -1,0 +1,42 @@
+Followings are the commands that I used to install MagFS
+
+** Enable port TCP 8080 and 8081 (inbound and outbound)
+
+
+# Launch 3 servers
+# Enable XMP v1 access on your GCS account
+# Then export global variables
+export ACCESS_KEY=GOOGAL2S5S4QFLSNGZ5I
+export SECRET_KEY=euRXQLfBEC/70vgCBQpL+VoVIddHxGsA25K5JDrP
+export CONTAINER=ajen_busket
+wget http://commondatastorage.googleapis.com/maginatics-packages/magfs.sh
+chmod +x magfs.sh
+./magfs.sh --accessKey=$ACCESS_KEY --secretKey=$SECRET_KEY --containerName=$CONTAINER setup
+./magfs.sh --accessKey=$ACCESS_KEY --secretKey=$SECRET_KEY --containerName=$CONTAINER init
+./magfs.sh --accessKey=$ACCESS_KEY --secretKey=$SECRET_KEY --containerName=$CONTAINER start
+exit
+
+# Install Clients. Pick a clients
+wget http://commondatastorage.googleapis.com/maginatics-packages/magfs_client-2013-03-27.tar.gz
+tar -zxf magfs-client-2013-03-27.tar.gz
+sudo mkdir -p /mnt/magfs (You can change "magf". But don't forget to modify the first line in /magfs-client/google_flags file.)
+cd magfs-client
+export LC_ALL=C
+sudo ./mag_client -v=2 --flagfile=google_flags --serverName=< master_server.IP.domain.com >
+ ** For example, if instance has external IP like 108.59.86.48. then reverse the ip address and append '.bc.googleusercontent.com' to it.
+ ** So the following would be our master_server that we set in step 1
+		sudo ./mag_client -v=2 --flagfile=google_flags --serverName=48.86.59.108.bc.googleusercontent.com
+
+After, use mount to see if there is an entry for /mnt/magfs 
+cd /mnt/magfs
+touch aaa
+
+# log on to other clients
+# repeat "Install Clients" step
+cd /mnt/magfs
+
+# You should see the file "aaa"
+# And when you input some words in "aaa"
+# Browse to GC storage web and click into the bucket
+# You will see the encrypted chunks. 
+
