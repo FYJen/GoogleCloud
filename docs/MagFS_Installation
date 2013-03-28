@@ -6,9 +6,9 @@ Followings are the commands that I used to install MagFS
 # Launch 3 servers
 # Enable XMP v1 access on your GCS account
 # Then export global variables
-export ACCESS_KEY=GOOGAL2S5S4QFLSNGZ5I
-export SECRET_KEY=euRXQLfBEC/70vgCBQpL+VoVIddHxGsA25K5JDrP
-export CONTAINER=ajen_busket
+export ACCESS_KEY=<YOUR_ACCESS_KEY>
+export SECRET_KEY=<YOUR_SECRET_KEY>
+export CONTAINER=<YOUR_BUCKET_NAME> # This can be any name you want
 wget http://commondatastorage.googleapis.com/maginatics-packages/magfs.sh
 chmod +x magfs.sh
 ./magfs.sh --accessKey=$ACCESS_KEY --secretKey=$SECRET_KEY --containerName=$CONTAINER setup
