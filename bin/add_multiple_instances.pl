@@ -48,21 +48,21 @@ foreach my $k (@ARGV) {
 # Parameters: file_name, find_string, replace_string
 #
 sub edit_file {
-	
-	my $file_name = shift;
-	my $find_string = shift;
-	my $replace_string = shift;
 
-	open (FILE, "+<$file_name");
-	my @file = <FILE>;
+    my $file_name = shift;
+    my $find_string = shift;
+    my $replace_string = shift;
 
-	seek (FILE, 0, 0);
+    open (FILE, "+<$file_name");
+    my @file = <FILE>;
 
-	foreach my $line (@file) {
+    seek (FILE, 0, 0);
+
+    foreach my $line (@file) {
         $line =~ s/$find_string/$replace_string/g;
         print FILE $line;
-	}
-	close FILE;
+    }
+    close FILE;
 }
 
 #
