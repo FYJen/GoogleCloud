@@ -35,6 +35,9 @@ my $mode = $ARGV[1];
 # parse the config file
 my ($zone, $ami, $instanceType, $numberOfCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes) = parseConfigFile($configFile);
 
+# Check Zone
+Check_Zone($zone);
+
 # Get a local user
 my $local_user = $ENV{LOGNAME};
 
@@ -108,6 +111,44 @@ sub usage {
 	print "\n\n";
 	exit (2);
 }
+
+
+#
+# Check Zone 
+#
+sub Check_Zone {
+
+	my $my_zone = shift;
+    my $available_zone;
+    my $status;
+
+    my @list_zones = `gcutil listzones | awk '{print \$2 \"\t\" \$6}'`;
+    foreach my $i (@list_zones) {
+        my @line = split("\t", $i);
+        if (($i =~ /^us/) || ($i =~ /^europe/)) {
+            $available_zone = $line[0];
+            chomp($available_zone);
+            # print "$available_zone";
+            $status = $line[1];
+            chomp($status);
+            # print "$status";
+
+            if (($available_zone eq $my_zone) && ($status eq "UP")) {
+                return;
+            } else {
+                # Did not match;
+            }
+        }
+    }
+    # WARNING: us-central1-a is unavailable due to maintenance.
+
+    print "\nWARNING:";
+    print "\n\t$my_zone is unavailable due to maintenance.";
+    print "\n\tPlease select different zones\n\n";
+    exit 1;
+}
+
+
 
 
 #
@@ -250,7 +291,7 @@ sub createInstances {
 	#update new counter to file.
 	open (FILE, ">.$instanceNamePrefix.counter.txt") || die "Cannot open file: $!\n";
 	print FILE "$counter";
-	close FILE;
+	close FILE;	
 }
 
 
