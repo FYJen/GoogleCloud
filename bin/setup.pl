@@ -35,9 +35,6 @@ my $mode = $ARGV[1];
 # parse the config file
 my ($zone, $ami, $instanceType, $numberOfCores, $instanceNamePrefix, $numberOfInstances, $master_node, $compute_nodes) = parseConfigFile($configFile);
 
-# Check Zone
-Check_Zone($zone);
-
 # Get a local user
 my $local_user = $ENV{LOGNAME};
 
@@ -50,6 +47,10 @@ print "\nINSTANCE NAME PREFIX\t$instanceNamePrefix";
 print "\nINSTANCE TYPE\t\t$instanceType [ $numberOfCores core(s) ]";
 print "\nNUMBER OF INSTANCES\t$numberOfInstances [ total number of cores " . $numberOfInstances * $numberOfCores . " ]";
 print "\n\n";
+
+
+# Check Zone
+#Check_Zone($zone);
 
 
 # Get all the running instances 
@@ -325,7 +326,7 @@ sub deleteInstances {
 	}
 	#remove counter file
 	unlink (".$instanceNamePrefix.counter.txt");
-	unlink <*.$SGE_INSTALLATION_POSTFIX>;
+	unlink <$instanceNamePrefix*.$SGE_INSTALLATION_POSTFIX>;
 	print "\n\n";
 }
 
